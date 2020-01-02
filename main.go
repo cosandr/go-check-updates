@@ -59,6 +59,7 @@ func writeBytes(bytes []byte, fp string) (err error) {
 	}
 	defer file.Close()
 	file.Write(bytes)
+	file.Chmod(0644)
 	return
 }
 
