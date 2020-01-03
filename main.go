@@ -109,10 +109,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("WARNING: %s\n", err)
 	}
-	if len(updates) == 0 {
-		fmt.Println("No updates found")
-		os.Exit(0)
-	}
+	fmt.Printf("%d updates found\n", len(updates))
 	err = saveYaml(cache, updates)
 	if err != nil {
 		panic(err)
