@@ -1,19 +1,22 @@
 # Maintainer: Andrei Costescu <andrei@costescu.no>
 
+# shellcheck shell=bash
+
 pkgname=go-check-updates-git
+_pkgname="${pkgname%-git}"
 pkgver=9879e6b
 pkgrel=1
 pkgdesc="Dump pending updates in a yaml file"
 arch=("any")
 url="https://github.com/cosandr/go-check-updates"
 license=("MIT")
+provides=("${_pkgname}")
+conflicts=("${_pkgname}")
 depends=("pacman-contrib")
 optdepends=('pikaur: AUR support')
 makedepends=("git" "go")
 source=("git+$url")
 md5sums=("SKIP")
-
-_pkgname=go-check-updates
 
 # Change cache file and wait time durations
 _cache_file="/tmp/${_pkgname}.yaml"
