@@ -13,6 +13,9 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+var defaultCache string = "/tmp/go-check-updates.yaml"
+var defaultWait string = "24h"
+
 func getDistro() (distro string, err error) {
 	file, err := os.Open("/etc/os-release")
 	if err != nil {
@@ -85,9 +88,9 @@ func main() {
 	}
 	var cache string
 	var updateEvery time.Duration
-	var everyDefault, _ = time.ParseDuration("24h")
+	var everyDefault, _ = time.ParseDuration(defaultWait)
 
-	flag.StringVar(&cache, "cache", "/tmp/go-updates.yaml", "Path to update cache file")
+	flag.StringVar(&cache, "cache", defaultCache, "Path to update cache file")
 	flag.DurationVar(&updateEvery, "every", everyDefault, "How often to update cache")
 	flag.Parse()
 

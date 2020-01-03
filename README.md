@@ -68,3 +68,10 @@ updates:
   newver: 42.0-6
   repo: pgdg94
 ```
+
+## Known Issues
+
+- Crash due to permissions if run by different users
+  - Per-user caches if not run as root `~/.config/go-check-updates/cache.yaml`?
+
+- Is `/tmp/` a good place?
