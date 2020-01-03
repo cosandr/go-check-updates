@@ -29,6 +29,7 @@ pkgver() {
 
 build() {
     cd "${_pkgname}"
+    go get -d
     go build -ldflags "-X main.defaultCache=${_cache_file} -X main.defaultWait=${_wait_time}" .
 }
 
