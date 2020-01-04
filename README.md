@@ -1,7 +1,7 @@
 
 # What does this do?
 
-Writes a yaml file, by default `/tmp/go-updates.yaml`, according to the struct defined in [types.go](./types/types.go). This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
+Writes a yaml file, by default `/tmp/go-check-updates.yaml`, according to the global variable `defaultCache` in [main.go](./main.go). This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
 
 ## Supported package managers
 
@@ -70,8 +70,5 @@ updates:
 ```
 
 ## Known Issues
-
-- Crash due to permissions if run by different users
-  - Per-user caches if not run as root `~/.config/go-check-updates/cache.yaml`?
 
 - Is `/tmp/` a good place?
