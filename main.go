@@ -17,6 +17,7 @@ import (
 
 var defaultCache string = "/tmp/go-check-updates.yaml"
 var defaultWait string = "24h"
+var defaultLog string = "STDOUT"
 
 func getDistro() (distro string, err error) {
 	file, err := os.Open("/etc/os-release")
@@ -38,22 +39,61 @@ func getDistro() (distro string, err error) {
 	return distro, fmt.Errorf("Cannot get distro ID")
 }
 
-func openHomeCache(fp *string) (file *os.File, err error) {
-	log.Println("Falling back to home directory")
+// userCacheFallback returns user cache directory with subfolder for this program
+//
+// Will fail if this directory cannot be created, typically `$HOME/.cache/go-check-updates`
+func userCacheFallback() (path string, err error) {
 	usrCache, err := os.UserCacheDir()
 	if err != nil {
 		return
 	}
-	*fp = usrCache + "/go-check-updates"
+	path = usrCache + "/go-check-updates"
 	// Create if missing
-	err = os.MkdirAll(*fp, 0700)
+	err = os.MkdirAll(path, 0700)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func openHomeCache(fp *string) (file *os.File, err error) {
+	*fp, err = userCacheFallback()
 	if err != nil {
 		return
 	}
 	*fp += "/cache.yaml"
-	file, err = os.OpenFile(*fp, os.O_RDWR|os.O_CREATE, 0644)
+	file, err = os.OpenFile(*fp, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return
+	}
+	return
+}
+
+func openHomeLog(fp *string) (file *os.File, err error) {
+	*fp, err = userCacheFallback()
+	if err != nil {
+		return
+	}
+	*fp += "/log"
+	file, err = os.OpenFile(*fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return
+	}
+	return
+}
+
+func getLogFile(fp *string) (file *os.File, err error) {
+	file, err = os.OpenFile(*fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println(err)
+		// Retry write to user directory
+		newFile, newErr := openHomeLog(fp)
+		// Pass through errors
+		err = newErr
+		if newErr != nil {
+			return
+		}
+		file = newFile
 	}
 	return
 }
@@ -64,20 +104,16 @@ func openHomeCache(fp *string) (file *os.File, err error) {
 func getCacheFile(fp *string) (file *os.File, err error) {
 	file, err = os.OpenFile(*fp, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
+		log.Println(err)
 		// Retry write to user directory
-		if os.IsPermission(err) {
-			newFile, newErr := openHomeCache(fp)
-			// Pass through errors
-			err = newErr
-			if newErr != nil {
-				return
-			}
-			file = newFile
-		} else {
+		newFile, newErr := openHomeCache(fp)
+		// Pass through errors
+		err = newErr
+		if newErr != nil {
 			return
 		}
+		file = newFile
 	}
-	log.Printf("Opened cache file: %s\n", *fp)
 	return
 }
 
@@ -131,21 +167,39 @@ func main() {
 	}
 	var cache string
 	var updateEvery time.Duration
+	var noLogging bool
+	var logFileFp string
 	var everyDefault, _ = time.ParseDuration(defaultWait)
 
 	flag.StringVar(&cache, "cache", defaultCache, "Path to update cache file")
 	flag.DurationVar(&updateEvery, "every", everyDefault, "How often to update cache")
+	flag.BoolVar(&noLogging, "nolog", false, "Disable logging")
+	flag.StringVar(&logFileFp, "logfile", defaultLog, "Path to log file")
 	flag.Parse()
+
+	if noLogging {
+		fmt.Println("Logging disabled")
+		log.SetOutput(ioutil.Discard)
+	} else if logFileFp != "STDOUT" {
+		file, err := getLogFile(&logFileFp)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer file.Close()
+		fmt.Printf("Saving log to: %s\n", logFileFp)
+		log.SetOutput(file)
+	}
 
 	cacheFile, err := getCacheFile(&cache)
 	if err != nil {
 		log.Panicln(err)
 	}
 	defer cacheFile.Close()
+	log.Printf("Opened cache file: %s\n", cache)
 
 	if !needsUpdate(cacheFile, updateEvery) {
-		fmt.Println("No update required")
-		os.Exit(0)
+		log.Println("No update required")
+		return
 	}
 
 	var updates []types.Update
@@ -156,15 +210,15 @@ func main() {
 	case "arch":
 		updates, err = arch.Update()
 	default:
-		panic(fmt.Errorf("Unsupported distro: %s", distro))
+		log.Panicf("Unsupported distro: %s\n", distro)
 	}
 	if err != nil {
-		fmt.Printf("WARNING: %s\n", err)
+		log.Printf("WARNING: %s\n", err)
 	}
-	fmt.Printf("%d updates found\n", len(updates))
+	log.Printf("%d updates found\n", len(updates))
 	err = saveYaml(cacheFile, updates)
 	if err != nil {
-		panic(err)
+		log.Panicln(err)
 	}
-	fmt.Printf("Cache file %s updated\n", cache)
+	log.Printf("Cache file %s updated\n", cache)
 }

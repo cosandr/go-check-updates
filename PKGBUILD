@@ -20,6 +20,7 @@ md5sums=("SKIP")
 
 # Change cache file and wait time durations
 _cache_file="/tmp/${_pkgname}.yaml"
+_log_file="/var/log/go-check-updates.log"
 _wait_time="1h"
 
 pkgver() {
@@ -30,11 +31,11 @@ pkgver() {
 build() {
     cd "${_pkgname}"
     go get -d
-    go build -ldflags "-X main.defaultCache=${_cache_file} -X main.defaultWait=${_wait_time}" .
+    go build -ldflags "-X main.defaultCache=${_cache_file} -X main.defaultWait=${_wait_time} -X main.defaultLog=${_log_file}" .
 }
 
 package() {
     cd "${_pkgname}"
-    install -Dm 755 "${srcdir}/${_pkgname}/${_pkgname}" "${pkgdir}/usr/bin/${_pkgname}"
+    install -Dm 755 "${_pkgname}" "${pkgdir}/usr/bin/${_pkgname}"
     install -Dm 644 LICENSE "${pkgdir}/usr/share/licenses/${_pkgname}/LICENSE"
 }
