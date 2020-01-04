@@ -64,8 +64,16 @@ func Update() (updates []types.Update, err error) {
 		// Split into package, version, repo
 		noSpaces := reSpaces.ReplaceAllString(line, "\t")
 		data := strings.Split(noSpaces, "\t")
+		// Check for `Obsoleting Packages`
+		if len(data) > 1 {
+			if data[0] == "Obsoleting" && data[1] == "Packages" {
+				break
+			}
+		}
 		// Skip invalid data
-		if len(data) < 3 { continue }
+		if len(data) < 3 {
+			continue
+		}
 		var u types.Update
 		u.Pkg = data[0]
 		u.NewVer = data[1]
