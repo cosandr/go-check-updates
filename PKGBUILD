@@ -67,9 +67,9 @@ Type = Package
 Target = *
 
 [Action]
-Description = Updating update cache
+Description = Running ${_pkgname}
 When = PostTransaction
-Exec = /usr/bin/${_pkgname} -cache ${_cache_file} -every 1s
+Exec = /usr/bin/${_pkgname} -cache ${_cache_file} -logfile STDOUT -every 10m
 Depends = ${_pkgname}
 EOF
 }
