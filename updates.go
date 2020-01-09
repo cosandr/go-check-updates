@@ -1,18 +1,19 @@
 package main
 
 import (
-	"os"
-	"log"
 	"bufio"
-	"regexp"
-	"fmt"
 	"flag"
-	"time"
+	"fmt"
 	"io/ioutil"
-	"gopkg.in/yaml.v2"
-	"github.com/cosandr/go-check-updates/redhat"
+	"log"
+	"os"
+	"regexp"
+	"time"
+
 	"github.com/cosandr/go-check-updates/arch"
+	"github.com/cosandr/go-check-updates/redhat"
 	"github.com/cosandr/go-check-updates/types"
+	"gopkg.in/yaml.v2"
 )
 
 var defaultCache string = "/tmp/go-check-updates.yaml"
@@ -132,7 +133,6 @@ func needsUpdate(file *os.File, dur time.Duration) bool {
 	return false
 }
 
-
 func readYaml(y *types.YamlT, file *os.File) (err error) {
 	bytes, err := ioutil.ReadAll(file)
 	if err != nil {
@@ -150,6 +150,14 @@ func saveYaml(file *os.File, updates []types.Update) (err error) {
 	yml.Updates = updates
 	yml.Checked = time.Now()
 	bytes, err := yaml.Marshal(&yml)
+	if err != nil {
+		return
+	}
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		return
+	}
+	err = file.Truncate(0)
 	if err != nil {
 		return
 	}

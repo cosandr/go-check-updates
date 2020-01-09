@@ -1,7 +1,8 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/cosandr/go-check-updates)](https://goreportcard.com/report/github.com/cosandr/go-check-updates) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/cosandr/go-check-updates/blob/master/LICENSE)
 
-# What does this do?
+# Introduction
 
-Writes a yaml file, by default `/tmp/go-check-updates.yaml`, according to the global variable `defaultCache` in [main.go](./main.go). This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
+This writes a yaml file, by default `/tmp/go-check-updates.yaml`, according to the global variable `defaultCache` in [updates.go](./updates.go). This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
 
 ## Supported package managers
 
@@ -13,7 +14,7 @@ dnf/yum | Y | N | Y | Y
 
 \* Repo is simply set to "aur" or "pacman"
 
-NOTE: [redhat.go](./redhat/redhat.go) is supposed to work with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is in `/etc/os-release`. If you know, feel free to add it to the switch case in [main.go](./main.go)
+NOTE: [redhat.go](./redhat/redhat.go) is supposed to work with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is in `/etc/os-release`. If you know, feel free to add it to the switch case in [updates.go](./updates.go)
 
 ## Example output
 
@@ -47,26 +48,26 @@ updates:
 Fedora:
 
 ```yaml
-checked: 2020-01-02T16:38:19.884383209+01:00
+checked: 2020-01-08T06:00:05.316357064+01:00
 updates:
-- pkg: pgdg-fedora-repo.noarch
-  newver: 42.0-6
-  repo: pgdg12
-- pkg: pgdg-fedora-repo.noarch
-  newver: 42.0-6
-  repo: pgdg11
-- pkg: pgdg-fedora-repo.noarch
-  newver: 42.0-6
-  repo: pgdg10
-- pkg: pgdg-fedora-repo.noarch
-  newver: 42.0-6
-  repo: pgdg96
-- pkg: pgdg-fedora-repo.noarch
-  newver: 42.0-6
-  repo: pgdg95
-- pkg: pgdg-fedora-repo.noarch
-  newver: 42.0-6
-  repo: pgdg94
+- pkg: dnf.noarch
+  newver: 4.2.17-1.fc30
+  repo: updates
+- pkg: dnf-data.noarch
+  newver: 4.2.17-1.fc30
+  repo: updates
+- pkg: dnf-plugins-core.noarch
+  newver: 4.0.12-1.fc30
+  repo: updates
+- pkg: libcomps.x86_64
+  newver: 0.1.14-1.fc30
+  repo: updates
+- pkg: python3-dnf.noarch
+  newver: 4.2.17-1.fc30
+  repo: updates
+- pkg: xvidcore.x86_64
+  newver: 1.3.7-1.fc30
+  repo: rpmfusion-free-updates
 ```
 
 ## Known Issues

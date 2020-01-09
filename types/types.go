@@ -10,8 +10,8 @@ type YamlT struct {
 
 // Update is the struct for pending updates
 type Update struct {
-	Pkg string
+	Pkg    string
 	OldVer string `yaml:",omitempty"`
 	NewVer string
-	Repo string `yaml:",omitempty"`
+	Repo   string `yaml:",omitempty"`
 }

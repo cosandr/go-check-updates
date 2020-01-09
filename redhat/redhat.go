@@ -15,10 +15,11 @@ pgdg-fedora-repo.noarch                                                42.0-6   
 */
 
 import (
-	"os/exec"
-	"strings"
 	"bytes"
+	"os/exec"
 	"regexp"
+	"strings"
+
 	"github.com/cosandr/go-check-updates/types"
 )
 

@@ -19,13 +19,14 @@ shellcheck 0.7.0-82 -> 0.7.0-83
 */
 
 import (
-	"os/exec"
 	"bytes"
+	"fmt"
+	"os/exec"
 	"regexp"
 	"strings"
-	"github.com/cosandr/go-check-updates/types"
 	"sync"
-	"fmt"
+
+	"github.com/cosandr/go-check-updates/types"
 )
 
 func checkPikaur() (ret string, err error) {
@@ -69,7 +70,9 @@ func procPacman(updates *[]types.Update, wg *sync.WaitGroup, err *error) {
 		noSpaces := reSpaces.ReplaceAllString(line, "\t")
 		data := strings.Split(noSpaces, "\t")
 		// Skip invalid data
-		if len(data) < 4 { continue }
+		if len(data) < 4 {
+			continue
+		}
 		var u types.Update
 		u.Pkg = data[0]
 		u.OldVer = data[1]
@@ -100,7 +103,9 @@ func procPikaur(updates *[]types.Update, wg *sync.WaitGroup, err *error) {
 		noSpaces := reSpaces.ReplaceAllString(line, "\t")
 		data := strings.Split(noSpaces, "\t")
 		// Skip invalid data
-		if len(data) < 4 { continue }
+		if len(data) < 4 {
+			continue
+		}
 		var u types.Update
 		u.Pkg = data[0]
 		u.OldVer = data[1]
