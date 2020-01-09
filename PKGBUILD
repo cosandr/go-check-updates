@@ -69,7 +69,7 @@ Target = *
 [Action]
 Description = Updating update cache
 When = PostTransaction
-Exec = /usr/bin/${_pkgname}
+Exec = /usr/bin/${_pkgname} -cache ${_cache_file} -every 1s
 Depends = ${_pkgname}
 EOF
 }
