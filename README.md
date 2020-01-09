@@ -16,6 +16,21 @@ dnf/yum | Y | N | Y | Y
 
 NOTE: [redhat.go](./redhat/redhat.go) is supposed to work with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is in `/etc/os-release`. If you know, feel free to add it to the switch case in [updates.go](./updates.go)
 
+## Installation
+
+### Arch Linux
+
+```sh
+wget https://raw.githubusercontent.com/cosandr/go-check-updates/master/PKGBUILD
+makepkg -si
+```
+
+Enable `go-check-updates.timer` to run daily at 06:00 (6am) or just rely on the pacman hook which triggers after every install/update.
+
+### Generic
+
+Clone the repo and build a binary. Take a look at the [PKGBUILD](./PKGBUILD), particularly the default location overrides and systemd unit files in `prepare()`. Cron would work as well, note that you should provide a short `every` parameter to guarantee it will update when run.
+
 ## Example output
 
 Arch:
