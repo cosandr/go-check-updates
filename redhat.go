@@ -1,4 +1,4 @@
-package redhat
+package main
 
 /*
 $ yum -e0 -d0 check-update
@@ -19,8 +19,6 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-
-	"github.com/cosandr/go-check-updates/types"
 )
 
 func runCmd(name string, buf *bytes.Buffer) (retStr string, err error) {
@@ -43,8 +41,8 @@ func runCmd(name string, buf *bytes.Buffer) (retStr string, err error) {
 	return
 }
 
-// Update uses dnf or yum to get available updates
-func Update() (updates []types.Update, err error) {
+// UpdateDnf uses dnf or yum to get available updates
+func UpdateDnf() (updates []Update, err error) {
 	var buf bytes.Buffer
 	var rawOut string
 	rawOut, err = runCmd("dnf", &buf)
@@ -75,7 +73,7 @@ func Update() (updates []types.Update, err error) {
 		if len(data) < 3 {
 			continue
 		}
-		var u types.Update
+		var u Update
 		u.Pkg = data[0]
 		u.NewVer = data[1]
 		u.Repo = data[2]
