@@ -19,6 +19,8 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+
+	"github.com/cosandr/go-check-updates/types"
 )
 
 func runCmd(name string, buf *bytes.Buffer) (retStr string, err error) {
@@ -42,7 +44,7 @@ func runCmd(name string, buf *bytes.Buffer) (retStr string, err error) {
 }
 
 // UpdateDnf uses dnf or yum to get available updates
-func UpdateDnf() (updates []Update, err error) {
+func UpdateDnf() (updates []types.Update, err error) {
 	var buf bytes.Buffer
 	var rawOut string
 	rawOut, err = runCmd("dnf", &buf)
@@ -73,7 +75,7 @@ func UpdateDnf() (updates []Update, err error) {
 		if len(data) < 3 {
 			continue
 		}
-		var u Update
+		var u types.Update
 		u.Pkg = data[0]
 		u.NewVer = data[1]
 		u.Repo = data[2]

@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/cosandr/go-check-updates/types"
 )
 
 func checkPikaur() (ret string, err error) {
@@ -51,7 +53,7 @@ func checkPacman() (ret string, err error) {
 	return
 }
 
-func procPacman(updates *[]Update, wg *sync.WaitGroup, err *error) {
+func procPacman(updates *[]types.Update, wg *sync.WaitGroup, err *error) {
 	raw, errPac := checkPacman()
 	if errPac != nil {
 		*err = errPac
@@ -71,7 +73,7 @@ func procPacman(updates *[]Update, wg *sync.WaitGroup, err *error) {
 		if len(data) < 4 {
 			continue
 		}
-		var u Update
+		var u types.Update
 		u.Pkg = data[0]
 		u.OldVer = data[1]
 		u.NewVer = data[3]
@@ -81,7 +83,7 @@ func procPacman(updates *[]Update, wg *sync.WaitGroup, err *error) {
 	wg.Done()
 }
 
-func procPikaur(updates *[]Update, wg *sync.WaitGroup, err *error) {
+func procPikaur(updates *[]types.Update, wg *sync.WaitGroup, err *error) {
 	raw, errPik := checkPikaur()
 	if errPik != nil {
 		*err = errPik
@@ -104,7 +106,7 @@ func procPikaur(updates *[]Update, wg *sync.WaitGroup, err *error) {
 		if len(data) < 4 {
 			continue
 		}
-		var u Update
+		var u types.Update
 		u.Pkg = data[0]
 		u.OldVer = data[1]
 		u.NewVer = data[3]
@@ -115,12 +117,12 @@ func procPikaur(updates *[]Update, wg *sync.WaitGroup, err *error) {
 }
 
 type updRes struct {
-	upd []Update
+	upd []types.Update
 	err error
 }
 
 // UpdateArch uses checkupdates and (if available) pikaur to get available updates
-func UpdateArch() (updates []Update, err error) {
+func UpdateArch() (updates []types.Update, err error) {
 	var wg sync.WaitGroup
 	var pacUpd updRes
 	var aurUpd updRes

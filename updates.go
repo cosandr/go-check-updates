@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/cosandr/go-check-updates/types"
 	"gopkg.in/yaml.v2"
 )
 
@@ -116,7 +117,7 @@ func getCacheFile(fp *string) (file *os.File, err error) {
 }
 
 func needsUpdate(file *os.File, dur time.Duration) bool {
-	var yml YamlT
+	var yml types.YamlT
 	err := readYaml(&yml, file)
 	// No cache, needs update
 	if err != nil {
@@ -130,7 +131,7 @@ func needsUpdate(file *os.File, dur time.Duration) bool {
 	return false
 }
 
-func readYaml(y *YamlT, file *os.File) (err error) {
+func readYaml(y *types.YamlT, file *os.File) (err error) {
 	bytes, err := ioutil.ReadAll(file)
 	if err != nil {
 		return
@@ -142,8 +143,8 @@ func readYaml(y *YamlT, file *os.File) (err error) {
 	return
 }
 
-func saveYaml(file *os.File, updates []Update) (err error) {
-	var yml YamlT
+func saveYaml(file *os.File, updates []types.Update) (err error) {
+	var yml types.YamlT
 	yml.Updates = updates
 	yml.Checked = time.Now()
 	bytes, err := yaml.Marshal(&yml)
@@ -207,7 +208,7 @@ func main() {
 		return
 	}
 
-	var updates []Update
+	var updates []types.Update
 	switch distro {
 	// TODO: Add other RedHat distros (RHEL, CentOS)
 	case "fedora":
