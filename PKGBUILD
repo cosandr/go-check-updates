@@ -28,7 +28,7 @@ pkgver() {
   ( set -o pipefail
     git describe --long 2>/dev/null | sed 's/\([^-]*-g\)/r\1/;s/-/./g' ||
     printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
-  )   
+  )
 }
 
 prepare() {
@@ -76,7 +76,7 @@ EOF
 
 build() {
     cd "${_pkgname}"
-    go get -d
+    go mod vendor
     go build -ldflags "-X main.defaultCache=${_cache_file} -X main.defaultWait=${_wait_time} -X main.defaultLog=${_log_file}" .
 }
 
