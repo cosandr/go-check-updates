@@ -14,7 +14,7 @@ dnf/yum | Y | N | Y | Y
 
 \* Repo is simply set to "aur" or "pacman"
 
-NOTE: [redhat.go](./redhat/redhat.go) is supposed to work with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is in `/etc/os-release`. If you know, feel free to add it to the switch case in [updates.go](./updates.go)
+NOTE: [redhat.go](./redhat.go) is supposed to work with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is in `/etc/os-release`. If you know, feel free to add it to the switch case in [updates.go](./updates.go)
 
 ## Installation
 
@@ -85,6 +85,17 @@ updates:
   repo: rpmfusion-free-updates
 ```
 
+## REST API
+
+Endpoints
+- `/run`  
+  - POST will update cache file
+    - `Immediate` header returns immediately
+  - GET will return pending updates list
+
+- `/cached` returns the latest cached updates
+  - `Update-Every` header will update the cache if it's older than the header's content (time duration)
+  - `Immediate` header returns whatever the existing cache file has and queues an update if combined with `Update-Every`
 ## Known Issues
 
 - Is `/tmp/` a good place?

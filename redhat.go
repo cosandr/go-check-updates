@@ -20,7 +20,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/cosandr/go-check-updates/types"
+	"github.com/cosandr/go-check-updates/api"
 )
 
 func runCmd(name string, buf *bytes.Buffer) (retStr string, err error) {
@@ -44,7 +44,7 @@ func runCmd(name string, buf *bytes.Buffer) (retStr string, err error) {
 }
 
 // UpdateDnf uses dnf or yum to get available updates
-func UpdateDnf() (updates []types.Update, err error) {
+func UpdateDnf() (updates []api.Update, err error) {
 	var buf bytes.Buffer
 	var rawOut string
 	rawOut, err = runCmd("dnf", &buf)
@@ -57,8 +57,7 @@ func UpdateDnf() (updates []types.Update, err error) {
 		return
 	}
 	// Strip newlines at start and end
-	rawOut = strings.TrimPrefix(rawOut, "\n")
-	rawOut = strings.TrimSuffix(rawOut, "\n")
+	rawOut = strings.TrimSpace(rawOut)
 	var reSpaces = regexp.MustCompile(`\s+`)
 	// Loop through each pending update
 	for _, line := range strings.Split(rawOut, "\n") {
@@ -75,7 +74,7 @@ func UpdateDnf() (updates []types.Update, err error) {
 		if len(data) < 3 {
 			continue
 		}
-		var u types.Update
+		var u api.Update
 		u.Pkg = data[0]
 		u.NewVer = data[1]
 		u.Repo = data[2]
