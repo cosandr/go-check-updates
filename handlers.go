@@ -28,7 +28,10 @@ func HandleRun(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			resp.Error = fmt.Sprintf("WARNING: %s", err)
 		}
-		resp.Updates = updates
+		resp.Data = &api.File{
+			Checked: time.Now().Format(time.RFC3339),
+			Updates: updates,
+		}
 	case "POST":
 		resp.FilePath = cacheFilePath
 		if _, ok := params["immediate"]; ok {
@@ -38,6 +41,7 @@ func HandleRun(w http.ResponseWriter, r *http.Request) {
 				wg.Done()
 			}()
 			log.Println("Update queued")
+			*resp.Queued = true
 		} else {
 			log.Println("Update requested")
 			err := updateFile()
@@ -56,7 +60,7 @@ func HandleRun(w http.ResponseWriter, r *http.Request) {
 	if debug {
 		log.Printf("Sending response:\n%s", string(d))
 	}
-	w.Write(d)
+	_, _ = w.Write(d)
 }
 
 // HandleCached returns the latest cached updates
@@ -88,6 +92,7 @@ func HandleCached(w http.ResponseWriter, r *http.Request) {
 						wg.Done()
 					}()
 					log.Println("Update queued")
+					*resp.Queued = true
 				} else if err := updateFile(); err != nil {
 					resp.Error = fmt.Sprintf("Cannot update cache file: %v", err)
 				}
@@ -99,17 +104,16 @@ func HandleCached(w http.ResponseWriter, r *http.Request) {
 		resp.Error += fmt.Sprintf("Cannot open cache file: %v", err)
 	} else {
 		defer cacheFile.Close()
-		yml, err := readFile(cacheFile)
+		f, err := readFile(cacheFile)
 		if err != nil {
 			resp.Error = fmt.Sprintf("Cannot parse cache file: %v", err)
 		} else {
-			resp.Updates = yml.Updates
-			resp.Checked = yml.Checked
+			resp.Data = &f
 		}
 	}
 	d, _ := json.Marshal(&resp)
 	if debug {
 		log.Printf("Sending response:\n%s", string(d))
 	}
-	w.Write(d)
+	_, _ = w.Write(d)
 }
