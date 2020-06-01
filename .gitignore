@@ -2,3 +2,4 @@ go-check-updates
 .vscode
 *.log
 .idea
+build

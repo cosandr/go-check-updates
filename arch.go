@@ -16,6 +16,19 @@ linux-headers 5.4.6.arch3-1 -> 5.4.7.arch1-1
 shellcheck 0.7.0-82 -> 0.7.0-83
  corefreq-git                          1.70-1               -> 1.71-1
  pikaur                                1.5.7-1              -> 1.5.8-1
+##########
+/var/log/pacman.log
+[2020-05-29T23:47:13+0200] [ALPM] upgraded linux-firmware (20200421.78c0348-1 -> 20200519.8ba6fa6-1)
+[2020-05-29T23:47:18+0200] [ALPM] upgraded linux-headers (5.6.14.arch1-1 -> 5.6.15.arch1-1)
+[2020-05-29T23:47:18+0200] [ALPM] upgraded networkmanager (1.24.0-1 -> 1.24.2-1)
+[2020-05-29T23:47:18+0200] [ALPM] upgraded python-setuptools (1:47.1.0-1 -> 1:47.1.1-1)
+[2020-05-29T23:47:18+0200] [ALPM] upgraded sbsigntools (0.9.3-1 -> 0.9.3-2)
+[2020-05-29T23:47:18+0200] [ALPM] upgraded shellcheck (0.7.1-32 -> 0.7.1-33)
+[2020-05-29T23:47:18+0200] [ALPM] upgraded vte-common (0.60.2-2 -> 0.60.3-1)
+[2020-05-29T23:47:18+0200] [ALPM] upgraded vte3 (0.60.2-2 -> 0.60.3-1)
+[2020-05-29T23:47:11+0200] [ALPM] installed haskell-these (1.1-1)
+[2020-05-12T10:19:08+0200] [ALPM] removed ovmf (1:202002-1)
+[2020-05-12T10:19:08+0200] [ALPM] removed libwbclient (4.11.3-3)
 */
 
 import (

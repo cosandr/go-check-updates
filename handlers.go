@@ -12,7 +12,7 @@ import (
 
 // HandleRun checks for updates immediately
 //
-// POST will update cache file, return immediately if Immediate header is present
+// POST will update cache file, return immediately if immediate param is present
 // GET will return pending updates list
 func HandleRun(w http.ResponseWriter, r *http.Request) {
 	if debug {
@@ -20,6 +20,7 @@ func HandleRun(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", contentType)
 	var resp api.Response
+	params := r.URL.Query()
 	switch r.Method {
 	case "GET":
 		log.Println("Response requested")
@@ -30,7 +31,7 @@ func HandleRun(w http.ResponseWriter, r *http.Request) {
 		resp.Updates = updates
 	case "POST":
 		resp.FilePath = cacheFilePath
-		if _, ok := r.Header["Immediate"]; ok {
+		if _, ok := params["immediate"]; ok {
 			wg.Add(1)
 			go func() {
 				_ = updateFile()
@@ -60,24 +61,27 @@ func HandleRun(w http.ResponseWriter, r *http.Request) {
 
 // HandleCached returns the latest cached updates
 //
-// Optional header
-// Update-Every: <update before returning if file is older than this>
+// Params
+// every: update before returning if file is older than this
+// immediate: return immediately
 func HandleCached(w http.ResponseWriter, r *http.Request) {
 	if debug {
 		log.Println(r.RequestURI)
 	}
 	w.Header().Set("Content-Type", contentType)
 	var resp api.Response
+	params := r.URL.Query()
 	// Do we need to check file age?
-	if val, ok := r.Header["Update-Every"]; ok {
+	if val := params.Get("every"); val != "" {
 		// Try to parse given duration
-		every, err := time.ParseDuration(val[0])
+		every, err := time.ParseDuration(val)
 		if err != nil {
 			resp.Error = fmt.Sprintf("Cannot parse time duration: %v", err)
 		} else {
 			log.Printf("Cache file update requested")
 			if needsUpdate(cacheFilePath, every) {
-				if _, ok := r.Header["Immediate"]; ok {
+				// Is the immediate key in params?
+				if _, ok := params["immediate"]; ok {
 					wg.Add(1)
 					go func() {
 						_ = updateFile()
@@ -95,12 +99,12 @@ func HandleCached(w http.ResponseWriter, r *http.Request) {
 		resp.Error += fmt.Sprintf("Cannot open cache file: %v", err)
 	} else {
 		defer cacheFile.Close()
-		yml, err := readYaml(cacheFile)
+		yml, err := readFile(cacheFile)
 		if err != nil {
 			resp.Error = fmt.Sprintf("Cannot parse cache file: %v", err)
 		} else {
 			resp.Updates = yml.Updates
-			resp.Checked = yml.Checked.Format(time.RFC3339)
+			resp.Checked = yml.Checked
 		}
 	}
 	d, _ := json.Marshal(&resp)

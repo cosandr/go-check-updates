@@ -6,20 +6,21 @@ pkgname=go-check-updates-git
 _pkgname="${pkgname%-git}"
 pkgver=9879e6b
 pkgrel=1
-pkgdesc="Dump pending updates in a yaml file"
+pkgdesc="Dump pending updates in a json file"
 arch=("any")
 url="https://github.com/cosandr/go-check-updates"
 license=("MIT")
 provides=("${_pkgname}")
 conflicts=("${_pkgname}")
-depends=("pacman-contrib")
+depends=("pacman-contrib" "curl")
 optdepends=('pikaur: AUR support')
 makedepends=("git" "go")
 source=("git+$url")
 md5sums=("SKIP")
+install="${_pkgname}.install"
 
 # Change cache file and wait time durations
-_cache_file="/tmp/${_pkgname}.yaml"
+_cache_file="/tmp/${_pkgname}.json"
 _log_file="/var/log/${_pkgname}.log"
 _wait_time="1h"
 
@@ -31,53 +32,13 @@ pkgver() {
   )
 }
 
-prepare() {
-    cd "${_pkgname}"
-
-    cat > ${_pkgname}.service <<EOF
-[Unit]
-Description=Run ${_pkgname}
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/${_pkgname} -cache ${_cache_file} -every 1s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    cat > ${_pkgname}.timer <<EOF
-[Unit]
-Description=Run ${_pkgname}
-
-[Timer]
-# Every day at 06:00
-OnCalendar=*-*-* 06:00:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-
-    cat > 99-${_pkgname}.hook <<EOF
-[Trigger]
-Operation = Install
-Operation = Upgrade
-Type = Package
-Target = *
-
-[Action]
-Description = Running ${_pkgname}
-When = PostTransaction
-Exec = /usr/bin/${_pkgname} -cache ${_cache_file} -logfile STDOUT -every 10m
-Depends = ${_pkgname}
-EOF
-}
-
 build() {
     cd "${_pkgname}"
+    ./setup.sh systemd-unit --pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./
+    ./setup.sh systemd-timer --pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./
+    ./setup.sh pacman-hook --pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./
     go mod vendor
-    go build -ldflags "-X main.defaultCache=${_cache_file} -X main.defaultWait=${_wait_time} -X main.defaultLog=${_log_file}" .
+    go build -ldflags "-X main.defaultCache=${_cache_file} -X main.defaultWait=${_wait_time} -X main.defaultLog=${_log_file}" -o "${_pkgname}"
 }
 
 package() {
@@ -86,7 +47,9 @@ package() {
     install -d "${pkgdir}/usr/share/libalpm/hooks"
     install -Dm 755 "${_pkgname}" "${pkgdir}/usr/bin/${_pkgname}"
     install -m 644 "${_pkgname}.service" "${pkgdir}/usr/lib/systemd/system/"
-    install -m 644 "${_pkgname}.timer" "${pkgdir}/usr/lib/systemd/system/"
-    install -m 644 "99-${_pkgname}.hook" "${pkgdir}/usr/share/libalpm/hooks/"
+    install -m 644 "${_pkgname}.socket" "${pkgdir}/usr/lib/systemd/system/"
+    install -m 644 "${_pkgname}-timer.service" "${pkgdir}/usr/lib/systemd/system/"
+    install -m 644 "${_pkgname}-timer.timer" "${pkgdir}/usr/lib/systemd/system/"
+    install -m 644 "${_pkgname}.hook" "${pkgdir}/usr/share/libalpm/hooks/"
     install -Dm 644 LICENSE "${pkgdir}/usr/share/licenses/${_pkgname}/LICENSE"
 }

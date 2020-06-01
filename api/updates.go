@@ -1,17 +1,15 @@
 package api
 
-import "time"
-
-// File is the struct for the yaml file
+// File is the struct for the json file
 type File struct {
-	Checked time.Time
-	Updates []Update
+	Checked string   `json:"checked"`
+	Updates []Update `json:"updates"`
 }
 
 // Update is the struct for pending updates
 type Update struct {
-	Pkg    string `yaml:"pkg" json:"pkg"`
-	OldVer string `yaml:"old_ver,omitempty" json:"oldVer,omitempty"`
-	NewVer string `yaml:"new_ver" json:"newVer"`
-	Repo   string `yaml:"repo,omitempty" json:"repo,omitempty"`
+	Pkg    string `json:"pkg"`
+	OldVer string `json:"oldVer,omitempty"`
+	NewVer string `json:"newVer"`
+	Repo   string `json:"repo,omitempty"`
 }

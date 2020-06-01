@@ -85,17 +85,24 @@ updates:
   repo: rpmfusion-free-updates
 ```
 
-## REST API
+## API
+
+Run with `-daemon` argument to start a web server,
+listen address and port can be adjusted with `-web.listen-address`.
+
+Alternatively, systemd socket activation can be used with the `-systemd` argument, socket and service units can be
+created with the `setup.sh` script.
 
 Endpoints
 - `/run`  
   - POST will update cache file
-    - `Immediate` header returns immediately
+    - `immediate` parameter returns immediately
   - GET will return pending updates list
 
 - `/cached` returns the latest cached updates
-  - `Update-Every` header will update the cache if it's older than the header's content (time duration)
-  - `Immediate` header returns whatever the existing cache file has and queues an update if combined with `Update-Every`
+  - `every` param will update the cache if it's older than the header's content (time duration)
+  - `immediate` param returns whatever the existing cache file has and queues an update if combined with `Update-Every`
+
 ## Known Issues
 
 - Is `/tmp/` a good place?

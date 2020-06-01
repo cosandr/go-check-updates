@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -15,11 +16,10 @@ import (
 
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/cosandr/go-check-updates/api"
-	"gopkg.in/yaml.v2"
 )
 
 const (
-	defaultCache string = "/tmp/go-check-updates.yaml"
+	defaultCache string = "/tmp/go-check-updates.json"
 	defaultWait  string = "24h"
 	defaultLog   string = "STDOUT"
 	contentType  string = "application/json"
@@ -34,6 +34,7 @@ var (
 	wg            sync.WaitGroup
 )
 
+// getDistro returns the host OS' distro ID (e.g. 'fedora', 'arch')
 func getDistro() (distro string, err error) {
 	file, err := os.Open("/etc/os-release")
 	if err != nil {
@@ -65,25 +66,21 @@ func userCacheFallback() (path string, err error) {
 	path = usrCache + "/go-check-updates"
 	// Create if missing
 	err = os.MkdirAll(path, 0700)
-	if err != nil {
-		return
-	}
 	return
 }
 
+// openHomeCache returns a file pointer to the cache file in the user's cache directory
 func openHomeCache(fp string) (file *os.File, err error) {
 	fp, err = userCacheFallback()
 	if err != nil {
 		return
 	}
-	fp += "/cache.yaml"
+	fp += "/cache.json"
 	file, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0600)
-	if err != nil {
-		return
-	}
 	return
 }
 
+// openHomeLog returns a file pointer to the log file in the user's cache directory
 func openHomeLog(fp string) (file *os.File, err error) {
 	fp, err = userCacheFallback()
 	if err != nil {
@@ -91,48 +88,46 @@ func openHomeLog(fp string) (file *os.File, err error) {
 	}
 	fp += "/log"
 	file, err = os.OpenFile(fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		return
-	}
 	return
 }
 
+// getLogFile tries to open the requested path, if it fails, a cache file in the user's cache directory is used
 func getLogFile(fp string) (file *os.File, err error) {
 	file, err = os.OpenFile(fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Println(err)
 		// Retry write to user directory
-		newFile, newErr := openHomeLog(fp)
-		// Pass through errors
-		err = newErr
-		if newErr != nil {
-			return
-		}
-		file = newFile
+		file, err = openHomeLog(fp)
 	}
 	return
 }
 
 // getCacheFile returns `os.File` pointer for cache file
 //
-// By default it is at `defaultCache` but it may be `$HOME/.cache/go-check-updates/cache.yaml` if default is not writable.
+// By default it is at `defaultCache` but it may be `$HOME/.cache/go-check-updates/cache.json` if default is not writable.
 func getCacheFile(fp string) (file *os.File, err error) {
 	file, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
-		log.Println(err)
-		// Retry write to user directory
-		newFile, newErr := openHomeCache(fp)
-		// Pass through errors
-		err = newErr
-		if newErr != nil {
-			return
+		if os.Geteuid() == 0 {
+			// Delete file and try again
+			_ = os.Remove(fp)
+			file, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0644)
+		} else {
+			// Fallback to home directory cache
+			log.Println(err)
+			// Retry write to user directory
+			file, err = openHomeCache(fp)
 		}
-		file = newFile
 	}
-	cacheFilePath = file.Name()
+	if err != nil && file != nil {
+		cacheFilePath = file.Name()
+	}
 	return
 }
 
+// needsUpdate attempts to read the cache file and determines if it needs an update
+//
+// Malformed files are considered invalid and will be replaced
 func needsUpdate(path string, dur time.Duration) bool {
 	file, err := getCacheFile(path)
 	// No cache, update
@@ -140,54 +135,54 @@ func needsUpdate(path string, dur time.Duration) bool {
 		return true
 	}
 	defer file.Close()
-	yml, err := readYaml(file)
-	// Cannot read, needs update
+	f, err := readFile(file)
+	// Cannot read, update
 	if err != nil {
 		return true
 	}
-	log.Printf("Cache last update: %s\n", yml.Checked.String())
-	lastUpdate := time.Since(yml.Checked)
+	log.Printf("Cache last update: %s\n", f.Checked)
+	t, err := time.Parse(time.RFC3339, f.Checked)
+	// Can't parse timestamp, update
+	if err != nil {
+		return true
+	}
+	lastUpdate := time.Since(t)
 	if lastUpdate.Seconds() > dur.Seconds() {
 		return true
 	}
 	return false
 }
 
-func readYaml(file *os.File) (yml api.File, err error) {
+func readFile(file *os.File) (yml api.File, err error) {
 	bytes, err := ioutil.ReadAll(file)
 	if err != nil {
 		return
 	}
-	err = yaml.Unmarshal(bytes, &yml)
-	if err != nil {
-		return
-	}
+	err = json.Unmarshal(bytes, &yml)
 	return
 }
 
-func saveYaml(file *os.File, updates []api.Update) (err error) {
-	var yml api.File
-	yml.Updates = updates
-	yml.Checked = time.Now()
-	bytes, err := yaml.Marshal(&yml)
+func writeFile(writeFile *os.File, updates []api.Update) (err error) {
+	var f api.File
+	f.Updates = updates
+	f.Checked = time.Now().Format(time.RFC3339)
+	bytes, err := json.Marshal(&f)
 	if err != nil {
 		return
 	}
-	_, err = file.Seek(0, 0)
+	_, err = writeFile.Seek(0, 0)
 	if err != nil {
 		return
 	}
-	err = file.Truncate(0)
+	err = writeFile.Truncate(0)
 	if err != nil {
 		return
 	}
-	_, err = file.Write(bytes)
-	if err != nil {
-		return
-	}
+	_, err = writeFile.Write(bytes)
 	return
 }
 
+// updateFile runs the distro specific update function and writes it to the cache file
 func updateFile() (err error) {
 	updates, err := runFunc()
 	if err != nil {
@@ -198,10 +193,11 @@ func updateFile() (err error) {
 	}
 	cacheFile, err := getCacheFile(cacheFilePath)
 	if err != nil {
-		log.Panicln(err)
+		log.Println(err)
+		return
 	}
 	defer cacheFile.Close()
-	err = saveYaml(cacheFile, updates)
+	err = writeFile(cacheFile, updates)
 	if err != nil {
 		log.Println(err)
 		return
@@ -231,6 +227,7 @@ func main() {
 	var updateEvery time.Duration
 	var quiet bool
 	var daemon bool
+	var listenAddress string
 	var socketActivate bool
 	var logFileFp string
 	var everyDefault, _ = time.ParseDuration(defaultWait)
@@ -241,6 +238,7 @@ func main() {
 	flag.BoolVar(&socketActivate, "systemd", false, "Run REST API using systemd socket activation")
 	flag.StringVar(&cacheFilePath, "cache", defaultCache, "Path to update cache file")
 	flag.StringVar(&logFileFp, "logfile", defaultLog, "Path to log file")
+	flag.StringVar(&listenAddress, "web.listen-address", ":8100", "Web server listen address")
 	flag.DurationVar(&updateEvery, "every", everyDefault, "How often to update cache")
 	flag.Parse()
 
@@ -271,7 +269,7 @@ func main() {
 		}
 		listener = listeners[0]
 	} else if daemon {
-		listener, err = net.Listen("tcp", ":8000")
+		listener, err = net.Listen("tcp", listenAddress)
 		if err != nil {
 			log.Panicf("cannot listen: %s", err)
 		}
@@ -280,6 +278,7 @@ func main() {
 	if socketActivate || daemon {
 		http.HandleFunc("/cached", HandleCached)
 		http.HandleFunc("/run", HandleRun)
+		log.Printf("Listening on %s", listener.Addr().String())
 		err = http.Serve(listener, nil)
 		wg.Wait()
 		if err != nil {
