@@ -41,7 +41,8 @@ func HandleRun(w http.ResponseWriter, r *http.Request) {
 				wg.Done()
 			}()
 			log.Println("Update queued")
-			*resp.Queued = true
+			tmp := true
+			resp.Queued = &tmp
 		} else {
 			log.Println("Update requested")
 			err := updateFile()
@@ -92,7 +93,8 @@ func HandleCached(w http.ResponseWriter, r *http.Request) {
 						wg.Done()
 					}()
 					log.Println("Update queued")
-					*resp.Queued = true
+					tmp := true
+					resp.Queued = &tmp
 				} else if err := updateFile(); err != nil {
 					resp.Error = fmt.Sprintf("Cannot update cache file: %v", err)
 				}
