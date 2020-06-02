@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"sync"
 	"time"
 
@@ -55,10 +56,10 @@ func getDistro() (distro string, err error) {
 	return distro, fmt.Errorf("cannot get distro ID")
 }
 
-// userCacheFallback returns user cache directory with subfolder for this program
+// userHomeFallback returns user cache directory with subfolder for this program
 //
 // Will fail if this directory cannot be created, typically `$HOME/.cache/go-check-updates`
-func userCacheFallback() (path string, err error) {
+func userHomeFallback() (path string, err error) {
 	usrCache, err := os.UserCacheDir()
 	if err != nil {
 		return
@@ -69,58 +70,50 @@ func userCacheFallback() (path string, err error) {
 	return
 }
 
-// openHomeCache returns a file pointer to the cache file in the user's cache directory
-func openHomeCache(fp string) (file *os.File, err error) {
-	fp, err = userCacheFallback()
+// getHomeCache returns a file pointer to the cache file in the user's cache directory
+func getHomeCache() (string, error) {
+	fp, err := userHomeFallback()
 	if err != nil {
-		return
+		return "", err
 	}
 	fp += "/cache.json"
-	file, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0600)
-	return
+	file, err := os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	return file.Name(), nil
+}
+
+// getCachePath returns path to cache file
+//
+// By default it is at `defaultCache` but it may be `$HOME/.cache/go-check-updates/cache.json` if default is not writable.
+func getCachePath() (string, error) {
+	file, err := os.OpenFile(defaultCache, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		// Retry write to user directory
+		return getHomeCache()
+	}
+	defer file.Close()
+	return file.Name(), nil
 }
 
 // openHomeLog returns a file pointer to the log file in the user's cache directory
-func openHomeLog(fp string) (file *os.File, err error) {
-	fp, err = userCacheFallback()
+func openHomeLog() (file *os.File, err error) {
+	fp, err := userHomeFallback()
 	if err != nil {
 		return
 	}
 	fp += "/log"
-	file, err = os.OpenFile(fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	return
+	return os.OpenFile(fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 }
 
 // getLogFile tries to open the requested path, if it fails, a cache file in the user's cache directory is used
 func getLogFile(fp string) (file *os.File, err error) {
 	file, err = os.OpenFile(fp, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		log.Println(err)
 		// Retry write to user directory
-		file, err = openHomeLog(fp)
-	}
-	return
-}
-
-// getCacheFile returns `os.File` pointer for cache file
-//
-// By default it is at `defaultCache` but it may be `$HOME/.cache/go-check-updates/cache.json` if default is not writable.
-func getCacheFile(fp string) (file *os.File, err error) {
-	file, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0644)
-	if err != nil {
-		if os.Geteuid() == 0 {
-			// Delete file and try again
-			_ = os.Remove(fp)
-			file, err = os.OpenFile(fp, os.O_RDWR|os.O_CREATE, 0644)
-		} else {
-			// Fallback to home directory cache
-			log.Println(err)
-			// Retry write to user directory
-			file, err = openHomeCache(fp)
-		}
-	}
-	if err != nil && file != nil {
-		cacheFilePath = file.Name()
+		return openHomeLog()
 	}
 	return
 }
@@ -128,14 +121,8 @@ func getCacheFile(fp string) (file *os.File, err error) {
 // needsUpdate attempts to read the cache file and determines if it needs an update
 //
 // Malformed files are considered invalid and will be replaced
-func needsUpdate(path string, dur time.Duration) bool {
-	file, err := getCacheFile(path)
-	// No cache, update
-	if err != nil {
-		return true
-	}
-	defer file.Close()
-	f, err := readFile(file)
+func needsUpdate(dur time.Duration) bool {
+	f, err := readCache()
 	// Cannot read, update
 	if err != nil {
 		return true
@@ -153,8 +140,19 @@ func needsUpdate(path string, dur time.Duration) bool {
 	return false
 }
 
-func readFile(file *os.File) (yml api.File, err error) {
-	bytes, err := ioutil.ReadAll(file)
+// checkFileRW returns true if the file can be written to OK
+// It is considered invalid if the current user is not its owner
+func checkFileRW(path string) error {
+	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return nil
+}
+
+func readCache() (yml api.File, err error) {
+	bytes, err := ioutil.ReadFile(cacheFilePath)
 	if err != nil {
 		return
 	}
@@ -162,7 +160,7 @@ func readFile(file *os.File) (yml api.File, err error) {
 	return
 }
 
-func writeFile(writeFile *os.File, updates []api.Update) (err error) {
+func writeCache(updates []api.Update) (err error) {
 	var f api.File
 	f.Updates = updates
 	f.Checked = time.Now().Format(time.RFC3339)
@@ -170,20 +168,12 @@ func writeFile(writeFile *os.File, updates []api.Update) (err error) {
 	if err != nil {
 		return
 	}
-	_, err = writeFile.Seek(0, 0)
-	if err != nil {
-		return
-	}
-	err = writeFile.Truncate(0)
-	if err != nil {
-		return
-	}
-	_, err = writeFile.Write(bytes)
+	err = ioutil.WriteFile(cacheFilePath, bytes, 0644)
 	return
 }
 
-// updateFile runs the distro specific update function and writes it to the cache file
-func updateFile() (err error) {
+// updateCache runs the distro specific update function and writes it to the cache file
+func updateCache() (err error) {
 	updates, err := runFunc()
 	if err != nil {
 		log.Printf("WARNING: %s\n", err)
@@ -191,18 +181,15 @@ func updateFile() (err error) {
 	if debug {
 		log.Printf("%d updates found\n", len(updates))
 	}
-	cacheFile, err := getCacheFile(cacheFilePath)
+	sort.Slice(updates, func(i, j int) bool {
+		return updates[i].Pkg < updates[j].Pkg
+	})
+	err = writeCache(updates)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	defer cacheFile.Close()
-	err = writeFile(cacheFile, updates)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	log.Printf("Cache file %s updated\n", cacheFile.Name())
+	log.Printf("Cache file %s updated\n", cacheFilePath)
 	return
 }
 
@@ -228,6 +215,7 @@ func main() {
 	var quiet bool
 	var daemon bool
 	var listenAddress string
+	var reqCacheFile string
 	var socketActivate bool
 	var logFileFp string
 	var everyDefault, _ = time.ParseDuration(defaultWait)
@@ -236,12 +224,23 @@ func main() {
 	flag.BoolVar(&debug, "debug", false, "Enable debug mode")
 	flag.BoolVar(&daemon, "daemon", false, "Run REST API as a daemon")
 	flag.BoolVar(&socketActivate, "systemd", false, "Run REST API using systemd socket activation")
-	flag.StringVar(&cacheFilePath, "cache", defaultCache, "Path to update cache file")
+	flag.StringVar(&reqCacheFile, "cache", defaultCache, "Path to update cache file")
 	flag.StringVar(&logFileFp, "logfile", defaultLog, "Path to log file")
 	flag.StringVar(&listenAddress, "web.listen-address", ":8100", "Web server listen address")
 	flag.DurationVar(&updateEvery, "every", everyDefault, "How often to update cache")
 	flag.Parse()
 
+	if reqCacheFile != defaultCache {
+		cacheFilePath = reqCacheFile
+		if err := checkFileRW(cacheFilePath); err != nil {
+			log.Fatalf("Cannot open cache file: %v", err)
+		}
+	} else {
+		cacheFilePath, err = getCachePath()
+		if err != nil {
+			log.Fatalf("No suitable cache file: %v", err)
+		}
+	}
 	if quiet {
 		if debug {
 			fmt.Println("Logging disabled")
@@ -256,7 +255,7 @@ func main() {
 		fmt.Printf("Saving log to: %s\n", logFileFp)
 		log.SetOutput(file)
 	}
-
+	log.Printf("Using cache file: %s", cacheFilePath)
 	var listener net.Listener
 	if socketActivate {
 		listeners, err := activation.Listeners()
@@ -271,7 +270,7 @@ func main() {
 	} else if daemon {
 		listener, err = net.Listen("tcp", listenAddress)
 		if err != nil {
-			log.Panicf("cannot listen: %s", err)
+			log.Panicf("Cannot listen: %s", err)
 		}
 	}
 
@@ -288,11 +287,11 @@ func main() {
 	}
 
 	// No HTTP stuff, just run normally
-	if !needsUpdate(cacheFilePath, updateEvery) {
+	if !needsUpdate(updateEvery) {
 		log.Println("No update required")
 		return
 	}
 
-	_ = updateFile()
+	_ = updateCache()
 
 }

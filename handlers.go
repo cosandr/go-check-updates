@@ -47,7 +47,7 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 					if debug {
 						log.Printf("Cache file update requested")
 					}
-					willRefresh = needsUpdate(cacheFilePath, every)
+					willRefresh = needsUpdate(every)
 				}
 			} else {
 				willRefresh = true
@@ -56,7 +56,7 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 				if immediate {
 					wg.Add(1)
 					go func() {
-						_ = updateFile()
+						_ = updateCache()
 						wg.Done()
 					}()
 					if debug {
@@ -65,12 +65,9 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 					tmp := true
 					resp.Queued = &tmp
 					w.WriteHeader(http.StatusAccepted)
-				} else if err := updateFile(); err != nil {
+				} else if err := updateCache(); err != nil {
 					resp.Error = fmt.Sprintf("Cannot update cache file: %v", err)
 					w.WriteHeader(http.StatusInternalServerError)
-				} else {
-					// Update went OK
-					w.WriteHeader(http.StatusOK)
 				}
 			}
 		}
@@ -78,20 +75,12 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 			resp.FilePath = cacheFilePath
 		}
 		if _, ok := params["updates"]; ok {
-			cacheFile, err := getCacheFile(cacheFilePath)
+			f, err := readCache()
 			if err != nil {
-				resp.Error += fmt.Sprintf("Cannot open cache file: %v", err)
+				resp.Error += fmt.Sprintf("Cannot read cache file: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 			} else {
-				defer cacheFile.Close()
-				f, err := readFile(cacheFile)
-				if err != nil {
-					resp.Error += fmt.Sprintf("Cannot parse cache file: %v", err)
-					w.WriteHeader(http.StatusInternalServerError)
-				} else {
-					resp.Data = &f
-					w.WriteHeader(http.StatusOK)
-				}
+				resp.Data = &f
 			}
 		}
 	}
