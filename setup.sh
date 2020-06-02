@@ -9,7 +9,7 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
 fi
 
 OPTIONS=hno:
-LONGOPTS=help,dry-run,output:,listen-address:,pkg-name:,cache-file:,bin-path:,systemd-path:,hook-path:
+LONGOPTS=help,dry-run,output:,listen-address:,pkg-name:,cache-file:,log-file:,bin-path:,systemd-path:,hook-path:
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -27,7 +27,9 @@ HOOK_PATH="/usr/share/libalpm/hooks"
 LOG_FILE="/var/log/${PKG_NAME}.log"
 CACHE_FILE="/tmp/${PKG_NAME}.json"
 LISTEN_ADDRESS="/run/$PKG_NAME.sock"
-DRY_RUN=0
+LOG_FILE_CHANGED=0
+CACHE_FILE_CHANGED=0
+LISTEN_ADDRESS_CHANGED=0
 
 function print_help () {
 # Using a here doc with standard out.
@@ -43,11 +45,10 @@ pacman-build          Copy required files to build a pacman package from local f
 
 Options:
 -h    --help            Show this message
--n    --dry-run         Don't change anything
       --listen-address  Listen address (default $LISTEN_ADDRESS)
       --pkg-name        Change package name (default $PKG_NAME)
-      --log-file        Change default cache file location (default $CACHE_FILE)
-      --cache-file      Change default log file location (default $LOG_FILE)
+      --cache-file      Change default cache file location (default $CACHE_FILE)
+      --log-file        Change default log file location (default $LOG_FILE)
       --bin-path        Path where the binary is installed (default $BIN_PATH)
       --systemd-path    Path where systemd units are installed (default $SYSTEMD_PATH)
       --hook-path       Path where pacman hooks are installed (default $HOOK_PATH)
@@ -60,20 +61,23 @@ while true; do
             print_help
             exit 0
             ;;
-        -n|--dry-run)
-            DRY_RUN=1
-            shift
-            ;;
         --pkg-name)
             PKG_NAME="$2"
             shift 2
             ;;
         --listen-address)
             LISTEN_ADDRESS="$2"
+            LISTEN_ADDRESS_CHANGED=1
+            shift 2
+            ;;
+        --log-file)
+            LOG_FILE="$2"
+            LOG_FILE_CHANGED=1
             shift 2
             ;;
         --cache-file)
             CACHE_FILE="$2"
+            CACHE_FILE_CHANGED=1
             shift 2
             ;;
         --bin-path)
@@ -102,6 +106,19 @@ done
 if [[ $# -ne 1 ]]; then
     echo "$0: A command is required."
     exit 4
+fi
+
+if [[ $LOG_FILE_CHANGED -eq 0 ]]; then
+    LOG_FILE="/var/log/${PKG_NAME}.log"
+fi
+
+if [[ $CACHE_FILE_CHANGED -eq 0 ]]; then
+    CACHE_FILE="/tmp/${PKG_NAME}.json"
+LISTEN_ADDRESS="/run/$PKG_NAME.sock"
+fi
+
+if [[ $LISTEN_ADDRESS_CHANGED -eq 0 ]]; then
+    LISTEN_ADDRESS="/run/$PKG_NAME.sock"
 fi
 
 PKG_PATH="$BIN_PATH/$PKG_NAME"

@@ -276,8 +276,7 @@ func main() {
 	}
 
 	if socketActivate || daemon {
-		http.HandleFunc("/cached", HandleCached)
-		http.HandleFunc("/run", HandleRun)
+		http.HandleFunc("/api", HandleAPI)
 		log.Printf("Listening on %s", listener.Addr().String())
 		err = http.Serve(listener, nil)
 		wg.Wait()

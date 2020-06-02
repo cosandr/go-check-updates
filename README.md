@@ -2,7 +2,7 @@
 
 # Introduction
 
-This writes a yaml file, by default `/tmp/go-check-updates.yaml`, according to the global variable `defaultCache` in [updates.go](./updates.go). This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
+This writes a json file, by default `/tmp/go-check-updates.json`, according to the global variable `defaultCache` in [updates.go](./updates.go). This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
 
 ## Supported package managers
 
@@ -25,65 +25,63 @@ wget https://raw.githubusercontent.com/cosandr/go-check-updates/master/PKGBUILD
 makepkg -si
 ```
 
-Enable `go-check-updates.timer` to run daily at 06:00 (6am) or just rely on the pacman hook which triggers after every install/update.
+Enable and start `go-check-updates.socket`, the pacman hook triggers after every update/remove.
 
 ### Generic
 
-Clone the repo and build a binary. Take a look at the [PKGBUILD](./PKGBUILD), particularly the default location overrides and systemd unit files in `prepare()`. Cron would work as well, note that you should provide a short `every` parameter to guarantee it will update when run.
+Use [setup.sh](setup.sh), read the help it prints out `setup.sh -h`
+
+## Usage
+
+Assuming it is listening on `localhost:8100`.
+See API section for more details.
+
+```sh
+# Update now, returns after update has completed
+$ curl 'http://localhost:8100/api?refresh'
+{}
+# Update now, return file location immediately
+$ curl 'http://localhost:8100/api?refresh&filepath&immediate'
+{"filePath":"/tmp/go-check-updates.json","queued":true}
+# Get current list of updates
+$ curl 'http://localhost:8100/api?updates'
+{"data":{"checked":"2020-06-02T13:28:16+02:00","updates":[]}}
+# Get current updates, update if file is older than 1 hour and return immediately
+# Status code will be 202 and the "queued" key will be present and true if an update was queued
+# If no update is needed, status code is 200 and there is no queued key present
+$ curl 'http://localhost:8100/api?refresh&updates&immediate&every=1h'
+# Can run directly as well (-every can be passed as argument)
+$ go-check-updates
+```
 
 ## Example output
 
-Arch:
-
-```yaml
-checked: 2020-01-02T18:01:45.062189725+01:00
-updates:
-- pkg: libarchive
-  oldver: 3.4.0-3
-  newver: 3.4.1-1
-  repo: pacman
-- pkg: libjpeg-turbo
-  oldver: 2.0.3-1
-  newver: 2.0.4-1
-  repo: pacman
-- pkg: linux
-  oldver: 5.4.6.arch3-1
-  newver: 5.4.7.arch1-1
-  repo: pacman
-- pkg: linux-headers
-  oldver: 5.4.6.arch3-1
-  newver: 5.4.7.arch1-1
-  repo: pacman
-- pkg: shellcheck
-  oldver: 0.7.0-82
-  newver: 0.7.0-83
-  repo: pacman
+```json
+{
+  "checked": "2020-06-01T23:10:23+02:00",
+  "updates": [
+    {
+      "pkg": "archiso",
+      "oldVer": "43-2",
+      "newVer": "44-2",
+      "repo": "pacman"
+    },
+    {
+      "pkg": "ca-certificates-mozilla",
+      "oldVer": "3.52.1-2",
+      "newVer": "3.53-1",
+      "repo": "pacman"
+    },
+    {
+      "pkg": "imagemagick",
+      "oldVer": "7.0.10.15-1",
+      "newVer": "7.0.10.16-2",
+      "repo": "pacman"
+    }
+  ]
+}
 ```
 
-Fedora:
-
-```yaml
-checked: 2020-01-08T06:00:05.316357064+01:00
-updates:
-- pkg: dnf.noarch
-  newver: 4.2.17-1.fc30
-  repo: updates
-- pkg: dnf-data.noarch
-  newver: 4.2.17-1.fc30
-  repo: updates
-- pkg: dnf-plugins-core.noarch
-  newver: 4.0.12-1.fc30
-  repo: updates
-- pkg: libcomps.x86_64
-  newver: 0.1.14-1.fc30
-  repo: updates
-- pkg: python3-dnf.noarch
-  newver: 4.2.17-1.fc30
-  repo: updates
-- pkg: xvidcore.x86_64
-  newver: 1.3.7-1.fc30
-  repo: rpmfusion-free-updates
-```
 
 ## API
 
@@ -93,15 +91,24 @@ listen address and port can be adjusted with `-web.listen-address`.
 Alternatively, systemd socket activation can be used with the `-systemd` argument, socket and service units can be
 created with the `setup.sh` script.
 
-Endpoints
-- `/run`  
-  - POST will update cache file
-    - `immediate` parameter returns immediately
-  - GET will return pending updates list
+`/api` endpoint
 
-- `/cached` returns the latest cached updates
-  - `every` param will update the cache if it's older than the header's content (time duration)
-  - `immediate` param returns whatever the existing cache file has and queues an update if combined with `Update-Every`
+One of these parameters must be present:
+
+- `filepath` returns path to the cache file in use
+- `updates` returns currently cached updates
+- `refresh` refreshes cached update list, the other commands run after this one. The following parameters can
+be combined with this one
+  - `every` value parsed as time duration, it will only refresh if the file is older than this duration
+  - `immediate` won't wait for the request to finish before returning, returned data (if requested) is likely
+    out of date
+    
+Status codes:
+
+- `200` request was successful
+- `400` bad argument(s)
+- `202` update queued
+- `500` something went wrong server side, `Error` is included in response with more details
 
 ## Known Issues
 
