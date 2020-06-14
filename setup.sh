@@ -202,7 +202,7 @@ Target = *
 [Action]
 Description = Queue cache update for $PKG_NAME
 When = PostTransaction
-Exec = /usr/bin/curl $CURL_ADDRESS --silent --output /dev/null -X POST 'http://localhost/run?immediate'
+Exec = /usr/bin/curl $CURL_ADDRESS --silent --output /dev/null 'http://localhost/run?immediate'
 Depends = curl
 EOF
         ;;

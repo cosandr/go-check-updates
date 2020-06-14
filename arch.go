@@ -69,7 +69,12 @@ func checkPacman() (ret string, err error) {
 func procPacman(updates *[]api.Update, wg *sync.WaitGroup, err *error) {
 	raw, errPac := checkPacman()
 	if errPac != nil {
-		*err = errPac
+		// Exit code 2 is OK, no updates
+		if exitError, ok := errPac.(*exec.ExitError); ok {
+			if exitError.ExitCode() != 2 {
+				*err = errPac
+			}
+		}
 		wg.Done()
 		return
 	}
