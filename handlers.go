@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/cosandr/go-check-updates/api"
 )
@@ -20,9 +21,7 @@ import (
 // - every: used with refresh, time duration to wait between updates
 // - immediate: used with refresh, return response without waiting for update to finish
 func HandleAPI(w http.ResponseWriter, r *http.Request) {
-	if debug {
-		log.Println(r.RequestURI)
-	}
+	log.Debug(r.RequestURI)
 	w.Header().Set("Content-Type", contentType)
 	var resp api.Response
 	params := r.URL.Query()
@@ -44,9 +43,7 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 					resp.Error = fmt.Sprintf("Cannot parse time duration: %v", err)
 					w.WriteHeader(http.StatusBadRequest)
 				} else {
-					if debug {
-						log.Printf("Cache file update requested")
-					}
+					log.Debugf("Cache file update requested")
 					willRefresh = needsUpdate(every)
 				}
 			} else {
@@ -59,9 +56,7 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 						_ = updateCache()
 						wg.Done()
 					}()
-					if debug {
-						log.Println("Update queued")
-					}
+					log.Debug("Update queued")
 					tmp := true
 					resp.Queued = &tmp
 					w.WriteHeader(http.StatusAccepted)
@@ -85,8 +80,6 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d, _ := json.Marshal(&resp)
-	if debug {
-		log.Printf("Sending response:\n%s", string(d))
-	}
+	log.Debugf("Sending response:\n%s", string(d))
 	_, _ = w.Write(d)
 }

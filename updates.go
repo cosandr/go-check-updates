@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/cosandr/go-check-updates/api"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -127,7 +127,7 @@ func needsUpdate(dur time.Duration) bool {
 	if err != nil {
 		return true
 	}
-	log.Printf("Cache last update: %s\n", f.Checked)
+	log.Infof("Cache last update: %s", f.Checked)
 	t, err := time.Parse(time.RFC3339, f.Checked)
 	// Can't parse timestamp, update
 	if err != nil {
@@ -176,20 +176,18 @@ func writeCache(updates []api.Update) (err error) {
 func updateCache() (err error) {
 	updates, err := runFunc()
 	if err != nil {
-		log.Printf("WARNING: %s\n", err)
+		log.Warn(err)
 	}
-	if debug {
-		log.Printf("%d updates found\n", len(updates))
-	}
+	log.Debugf("%d updates found", len(updates))
 	sort.Slice(updates, func(i, j int) bool {
 		return updates[i].Pkg < updates[j].Pkg
 	})
 	err = writeCache(updates)
 	if err != nil {
-		log.Println(err)
+		log.Warn(err)
 		return
 	}
-	log.Printf("Cache file %s updated\n", cacheFilePath)
+	log.Infof("Cache file %s updated", cacheFilePath)
 	return
 }
 
@@ -241,10 +239,22 @@ func main() {
 			log.Fatalf("No suitable cache file: %v", err)
 		}
 	}
+	// Logging setup
+	// Disable timestamps when running in background mode
+	// They are not needed as these modes are most likely used with systemd
+	// which adds its own timestamps
+	if socketActivate || daemon {
+		log.SetFormatter(&log.TextFormatter{DisableTimestamp: true})
+	} else {
+		log.SetFormatter(&log.TextFormatter{DisableTimestamp: false, FullTimestamp: true})
+	}
+	if debug {
+		log.SetLevel(log.DebugLevel)
+		log.Debug("Debug mode")
+	} else {
+		log.SetLevel(log.InfoLevel)
+	}
 	if quiet {
-		if debug {
-			fmt.Println("Logging disabled")
-		}
 		log.SetOutput(ioutil.Discard)
 	} else if logFileFp != "STDOUT" {
 		file, err := getLogFile(logFileFp)
@@ -252,10 +262,10 @@ func main() {
 			log.Fatal(err)
 		}
 		defer file.Close()
-		fmt.Printf("Saving log to: %s\n", logFileFp)
+		log.Infof("Saving log to: %s", logFileFp)
 		log.SetOutput(file)
 	}
-	log.Printf("Using cache file: %s", cacheFilePath)
+	log.Infof("Using cache file: %s", cacheFilePath)
 	var listener net.Listener
 	if socketActivate {
 		listeners, err := activation.Listeners()
@@ -276,11 +286,11 @@ func main() {
 
 	if socketActivate || daemon {
 		http.HandleFunc("/api", HandleAPI)
-		log.Printf("Listening on %s", listener.Addr().String())
+		log.Infof("Listening on %s", listener.Addr().String())
 		err = http.Serve(listener, nil)
 		wg.Wait()
 		if err != nil {
-			log.Printf("HTTP serve error: %v", err)
+			log.Errorf("HTTP serve error: %v", err)
 			os.Exit(2)
 		}
 		os.Exit(0)
@@ -288,7 +298,7 @@ func main() {
 
 	// No HTTP stuff, just run normally
 	if !needsUpdate(updateEvery) {
-		log.Println("No update required")
+		log.Info("No update required")
 		return
 	}
 
