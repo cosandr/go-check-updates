@@ -184,7 +184,7 @@ Description=Run $PKG_NAME
 
 [Service]
 Type=oneshot
-ExecStart=$PKG_PATH -cache $CACHE_FILE -every 1s
+ExecStart=/usr/bin/curl $CURL_ADDRESS --silent --output /dev/null 'http://localhost/api?refresh&immediate'
 
 [Install]
 WantedBy=multi-user.target
@@ -202,7 +202,7 @@ Target = *
 [Action]
 Description = Queue cache update for $PKG_NAME
 When = PostTransaction
-Exec = /usr/bin/curl $CURL_ADDRESS --silent --output /dev/null 'http://localhost/run?immediate'
+Exec = /usr/bin/curl $CURL_ADDRESS --silent --output /dev/null 'http://localhost/api?refresh&immediate'
 Depends = curl
 EOF
         ;;
