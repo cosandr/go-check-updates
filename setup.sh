@@ -158,6 +158,8 @@ EOF
         cat <<EOF | tee "$SERVICE_FILE"
 [Unit]
 Description=$PKG_NAME service
+After=network.target
+Requires=network.target
 
 [Service]
 ExecStart=$PKG_PATH -systemd
@@ -170,8 +172,9 @@ EOF
 Description=Run $PKG_NAME
 
 [Timer]
-# Every day at 06:00
-OnCalendar=*-*-* 06:00:00
+# Every hour
+OnBootSec=10s
+OnUnitActiveSec=1h
 Persistent=true
 
 [Install]
@@ -181,6 +184,7 @@ EOF
         cat <<EOF | tee "$TIMER_SERVICE"
 [Unit]
 Description=Run $PKG_NAME
+Requires=$SOCKET_FILE
 
 [Service]
 Type=oneshot
