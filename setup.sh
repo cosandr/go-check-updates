@@ -114,7 +114,6 @@ fi
 
 if [[ $CACHE_FILE_CHANGED -eq 0 ]]; then
     CACHE_FILE="/tmp/${PKG_NAME}.json"
-LISTEN_ADDRESS="/run/$PKG_NAME.sock"
 fi
 
 if [[ $LISTEN_ADDRESS_CHANGED -eq 0 ]]; then
@@ -145,6 +144,7 @@ case "$1" in
         go build -o "$PKG_PATH" -ldflags "-X main.defaultCache=${CACHE_FILE} -X main.defaultLog=${LOG_FILE}"
         ;;
     systemd-unit)
+        set +e
         echo -e "\n########## Systemd socket ##########\n"
         cat <<EOF | tee "$SOCKET_FILE"
 [Socket]
@@ -184,7 +184,7 @@ EOF
         cat <<EOF | tee "$TIMER_SERVICE"
 [Unit]
 Description=Run $PKG_NAME
-Requires=$SOCKET_FILE
+Requires=$PKG_NAME.service
 
 [Service]
 Type=oneshot

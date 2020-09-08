@@ -110,6 +110,11 @@ Status codes:
 - `202` update queued
 - `500` something went wrong server side, `Error` is included in response with more details
 
+## Websocket
+
+Requires web server (daemon or systemd mode). Connect to `/ws` endpoint to receive
+data (same as the JSON file) when the cache file is updated.
+
 ## Known Issues
 
 - Is `/tmp/` a good place?
