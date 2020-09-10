@@ -36,7 +36,6 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
-	"strings"
 	"sync"
 
 	"github.com/cosandr/go-check-updates/api"
@@ -78,23 +77,12 @@ func procPacman(updates *[]api.Update, wg *sync.WaitGroup, err *error) {
 		wg.Done()
 		return
 	}
-	// Strip newlines at the end
-	raw = strings.TrimSuffix(raw, "\n")
-	var reSpaces = regexp.MustCompile(`\s+`)
-	// Loop through each pending update
-	for _, line := range strings.Split(raw, "\n") {
-		// shellcheck 0.7.0-82 -> 0.7.0-83
-		// Split into package | oldver | -> | newver
-		noSpaces := reSpaces.ReplaceAllString(line, "\t")
-		data := strings.Split(noSpaces, "\t")
-		// Skip invalid data
-		if len(data) < 4 {
-			continue
-		}
+	re := regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<oldver>\S+)\s+->\s+(?P<newver>\S+)\s*$`)
+	for _, m := range re.FindAllStringSubmatch(raw, -1) {
 		var u api.Update
-		u.Pkg = data[0]
-		u.OldVer = data[1]
-		u.NewVer = data[3]
+		u.Pkg = m[1]
+		u.OldVer = m[2]
+		u.NewVer = m[3]
 		u.Repo = "pacman"
 		*updates = append(*updates, u)
 	}
@@ -108,26 +96,12 @@ func procPikaur(updates *[]api.Update, wg *sync.WaitGroup, err *error) {
 		wg.Done()
 		return
 	}
-	// Strip newlines at the end
-	raw = strings.TrimSuffix(raw, "\n")
-	var reStart = regexp.MustCompile(`^\s+`)
-	var reSpaces = regexp.MustCompile(`\s+`)
-	// Loop through each pending update
-	for _, line := range strings.Split(raw, "\n") {
-		// Strip leading spaces
-		line = reStart.ReplaceAllString(line, "")
-		// shellcheck 0.7.0-82 -> 0.7.0-83
-		// Split into package | oldver | -> | newver
-		noSpaces := reSpaces.ReplaceAllString(line, "\t")
-		data := strings.Split(noSpaces, "\t")
-		// Skip invalid data
-		if len(data) < 4 {
-			continue
-		}
+	re := regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<oldver>\S+)\s+->\s+(?P<newver>\S+)\s*$`)
+	for _, m := range re.FindAllStringSubmatch(raw, -1) {
 		var u api.Update
-		u.Pkg = data[0]
-		u.OldVer = data[1]
-		u.NewVer = data[3]
+		u.Pkg = m[1]
+		u.OldVer = m[2]
+		u.NewVer = m[3]
 		u.Repo = "aur"
 		*updates = append(*updates, u)
 	}

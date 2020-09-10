@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"os/exec"
 	"regexp"
-	"strings"
 
 	"github.com/cosandr/go-check-updates/api"
 )
@@ -56,28 +55,12 @@ func UpdateDnf() (updates []api.Update, err error) {
 	if err != nil {
 		return
 	}
-	// Strip newlines at start and end
-	rawOut = strings.TrimSpace(rawOut)
-	var reSpaces = regexp.MustCompile(`\s+`)
-	// Loop through each pending update
-	for _, line := range strings.Split(rawOut, "\n") {
-		// Split into package, version, repo
-		noSpaces := reSpaces.ReplaceAllString(line, "\t")
-		data := strings.Split(noSpaces, "\t")
-		// Check for `Obsoleting Packages`
-		if len(data) > 1 {
-			if data[0] == "Obsoleting" && data[1] == "Packages" {
-				break
-			}
-		}
-		// Skip invalid data
-		if len(data) < 3 {
-			continue
-		}
+	re := regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<repo>\S+)\s+(?P<ver>\S+)\s*$`)
+	for _, m := range re.FindAllStringSubmatch(rawOut, -1) {
 		var u api.Update
-		u.Pkg = data[0]
-		u.NewVer = data[1]
-		u.Repo = data[2]
+		u.Pkg = m[1]
+		u.NewVer = m[2]
+		u.Repo = m[3]
 		updates = append(updates, u)
 	}
 	return

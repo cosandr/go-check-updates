@@ -16,6 +16,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// LatestFile holds a threadsafe api.File
 type LatestFile struct {
 	*sync.Cond
 	f api.File
