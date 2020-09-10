@@ -66,22 +66,22 @@ func wsWriter(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn
 				log.Debugf("wsWriter (%s): message sender closed externally", remoteName)
 				return
 			default:
-				latestFile.L.Lock()
+				cache.L.Lock()
 				log.Debugf("wsWriter (%s): lock acquired", remoteName)
-				for latestFile.f.Checked == "" || latestFile.f.Checked == lastChecked {
+				for cache.f.Checked == "" || cache.f.Checked == lastChecked {
 					log.Debugf("wsWriter (%s): waiting", remoteName)
-					latestFile.Wait()
+					cache.Wait()
 				}
 				log.Debugf("wsWriter (%s): sending message", remoteName)
 				ws.SetWriteDeadline(time.Now().Add(writeWait))
-				err := ws.WriteJSON(&latestFile.f)
+				err := ws.WriteJSON(&cache.f)
 				if err != nil {
 					log.Errorf("wsWriter (%s): cannot send message: %v", remoteName, err)
 					cancel()
 					return
 				}
-				lastChecked = latestFile.f.Checked
-				latestFile.L.Unlock()
+				lastChecked = cache.f.Checked
+				cache.L.Unlock()
 				log.Debugf("wsWriter (%s): unlock", remoteName)
 			}
 		}

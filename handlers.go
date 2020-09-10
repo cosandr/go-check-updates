@@ -24,12 +24,12 @@ import (
 // - immediate: used with refresh, return response without waiting for update to finish
 func HandleAPI(w http.ResponseWriter, r *http.Request) {
 	log.Debugf("GET - %s - %s", r.RemoteAddr, r.RequestURI)
-	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Type", "application/json")
 	var resp api.Response
 	defer func() {
-		log.Debug("Marshalling response")
+		log.Debug("HandleAPI: Marshalling response")
 		d, _ := json.Marshal(&resp)
-		log.Debugf("Sending response:\n%s", string(d))
+		log.Debugf("HandleAPI: Sending response:\n%s", string(d))
 		_, _ = w.Write(d)
 	}()
 	params := r.URL.Query()
@@ -37,7 +37,7 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 	_, filepath := params["filepath"]
 	_, refresh := params["refresh"]
 	if !(updates || filepath || refresh) {
-		log.Debug("Missing arguments")
+		log.Debug("HandleAPI: Missing arguments")
 		resp.Error = "filepath, updates and/or refresh parameter(s) required"
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -53,57 +53,52 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			log.Debug("Conditional cache file update requested")
-			willRefresh = needsUpdate(every)
+			log.Debug("HandleAPI: Conditional cache file update requested")
+			willRefresh = cache.NeedsUpdate(every)
 		} else {
-			log.Debug("Unconditional cache file update requested")
+			log.Debug("HandleAPI: Unconditional cache file update requested")
 			willRefresh = true
 		}
 		if willRefresh {
-			log.Debug("Cache file refreshing")
+			log.Debug("HandleAPI: Cache file refreshing")
 			if immediate {
 				globalWg.Add(1)
 				go func() {
-					_ = updateCache()
+					_ = cache.Update()
 					globalWg.Done()
 				}()
-				log.Debug("Cache file update queued")
+				log.Debug("HandleAPI: Cache file update queued")
 				tmp := true
 				resp.Queued = &tmp
 				w.WriteHeader(http.StatusAccepted)
 			} else {
-				log.Debug("Cache file updating")
-				err := updateCache()
+				log.Debug("HandleAPI: Cache file updating")
+				err := cache.Update()
 				if err != nil {
 					log.Errorf("Update failed: %v", err)
 					resp.Error = fmt.Sprintf("Cannot update cache file: %v", err)
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
-				log.Debug("Cache file updated")
+				log.Debug("HandleAPI: Cache file updated")
 			}
 		}
 	}
 	if filepath {
-		log.Debugf("File path requested: %s", cacheFilePath)
-		resp.FilePath = cacheFilePath
+		log.Debugf("HandleAPI: File path requested: %s", cache.fp)
+		resp.FilePath = cache.fp
 	}
 	if updates {
-		log.Debug("Updates requested")
-		if latestFile.f.IsEmpty() {
-			log.Debugf("Latest file is empty, reading from %s", cacheFilePath)
-			f, err := readCacheFile()
-			if err != nil {
-				log.Errorf("Read failed: %v", err)
-				resp.Error += fmt.Sprintf("Cannot read cache file: %v", err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			log.Debug("File read, copying to latestFile")
-			updateLatestFile(&f)
+		log.Debug("HandleAPI: Updates requested")
+		f, err := cache.GetFile()
+		if err != nil {
+			log.Errorf("HandleAPI: %v", err)
+			resp.Error += err.Error()
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
-		log.Debug("Setting response data to cache file content")
-		resp.Data = &latestFile.f
+		log.Debug("HandleAPI: Setting response data to cache file content")
+		resp.Data = &f
 	}
 	return
 }

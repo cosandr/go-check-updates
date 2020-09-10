@@ -15,18 +15,14 @@ pgdg-fedora-repo.noarch                                                42.0-6   
 */
 
 import (
-	"bytes"
 	"os/exec"
 	"regexp"
 
 	"github.com/cosandr/go-check-updates/api"
 )
 
-func runCmd(name string, buf *bytes.Buffer) (retStr string, err error) {
-	cmd := exec.Command(name, "-e0", "-d0", "check-update")
-	cmd.Stdout = buf
-	err = cmd.Run()
-	retStr = buf.String()
+func runYum(name string) (retStr string, err error) {
+	retStr, err = runCmd(name, "-e0", "-d0", "check-update")
 	if err != nil {
 		// DNF returns code 100 if there are updates
 		if exitError, ok := err.(*exec.ExitError); ok {
@@ -38,18 +34,16 @@ func runCmd(name string, buf *bytes.Buffer) (retStr string, err error) {
 			}
 		}
 	}
-	buf.Reset()
 	return
 }
 
 // UpdateDnf uses dnf or yum to get available updates
 func UpdateDnf() (updates []api.Update, err error) {
-	var buf bytes.Buffer
 	var rawOut string
-	rawOut, err = runCmd("dnf", &buf)
+	rawOut, err = runYum("dnf")
 	// Try yum instead
 	if err != nil {
-		rawOut, err = runCmd("yum", &buf)
+		rawOut, err = runYum("yum")
 	}
 	// Both failed
 	if err != nil {

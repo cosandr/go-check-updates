@@ -32,7 +32,6 @@ shellcheck 0.7.0-82 -> 0.7.0-83
 */
 
 import (
-	"bytes"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -41,32 +40,8 @@ import (
 	"github.com/cosandr/go-check-updates/api"
 )
 
-func checkPikaur() (ret string, err error) {
-	var outBuf bytes.Buffer
-	cmd := exec.Command("pikaur", "-Qua")
-	cmd.Stdout = &outBuf
-	err = cmd.Run()
-	if err != nil {
-		return
-	}
-	ret = outBuf.String()
-	return
-}
-
-func checkPacman() (ret string, err error) {
-	var outBuf bytes.Buffer
-	cmd := exec.Command("checkupdates")
-	cmd.Stdout = &outBuf
-	err = cmd.Run()
-	if err != nil {
-		return
-	}
-	ret = outBuf.String()
-	return
-}
-
 func procPacman(updates *[]api.Update, wg *sync.WaitGroup, err *error) {
-	raw, errPac := checkPacman()
+	raw, errPac := runCmd("checkupdates")
 	if errPac != nil {
 		// Exit code 2 is OK, no updates
 		if exitError, ok := errPac.(*exec.ExitError); ok {
@@ -90,7 +65,7 @@ func procPacman(updates *[]api.Update, wg *sync.WaitGroup, err *error) {
 }
 
 func procPikaur(updates *[]api.Update, wg *sync.WaitGroup, err *error) {
-	raw, errPik := checkPikaur()
+	raw, errPik := runCmd("pikaur", "-Qua")
 	if errPik != nil {
 		*err = errPik
 		wg.Done()
