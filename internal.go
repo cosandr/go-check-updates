@@ -22,11 +22,9 @@ type InternalCache struct {
 
 // Update the internal cache and optional file
 func (ic *InternalCache) Update() error {
+	log.Info("Refreshing")
 	var updates []api.Update
 	var err error
-	ic.L.Lock()
-	log.Debug("InternalCache.Update: lock")
-	defer ic.L.Unlock()
 	switch distro {
 	case "fedora":
 		updates, err = UpdateDnf()
@@ -46,7 +44,6 @@ func (ic *InternalCache) Update() error {
 	if ic.fp != "" {
 		err = ic.Write()
 	}
-	// log.Debugf("InternalCache.Update: %v", ic.f)
 	ic.Broadcast()
 	log.Debug("InternalCache.Update: broadcast")
 	return nil

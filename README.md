@@ -2,7 +2,22 @@
 
 # Introduction
 
-This writes a json file, by default `/tmp/go-check-updates.json`, according to the global variable `defaultCache` in [updates.go](./updates.go). This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
+A program to check for updates and make the list of updates available through a JSON file or a simple API.
+By default it will check for updates every 12 hours,
+if run in daemon mode then it will refresh every 12 hours,
+otherwise it simply does nothing when run before 12 hours has passed since the previous update.
+
+The default cache file may change, the first choice is `/tmp/go-check-updates.json`.
+If the file exists but it isn't writable, it will fallback to `$HOME/.cache/go-check-updates/cache.json` instead.
+
+It can be disabled completely with `-no-cache`.
+
+The refresh interval can be changed with the `-cache.interval` option, disable with `no-refresh`.
+Disabled without daemon mode will refresh every time it is run, with daemon mode there is no auto-refresh.
+
+See `go-check-updates -h` for up to date information on the parameters.
+
+This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
 
 ## Supported package managers
 
@@ -14,14 +29,15 @@ dnf/yum | Y | N | Y | Y
 
 \* Repo is simply set to "aur" or "pacman"
 
-NOTE: [redhat.go](./redhat.go) is supposed to work with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is in `/etc/os-release`. If you know, feel free to add it to the switch case in [updates.go](./updates.go)
+NOTE: dnf/yum only work with Fedora, [redhat.go](./redhat.go) is supposed to work with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is in `/etc/os-release`. If you know, feel free to add it to the switch case in [internal.go](./internal.go)
 
 ## Installation
 
 ### Arch Linux
 
 ```sh
-wget https://raw.githubusercontent.com/cosandr/go-check-updates/master/PKGBUILD
+git clone https://github.com/cosandr/go-check-updates.git
+cd go-check-updates/PKGBUILD
 makepkg -si
 ```
 
@@ -50,12 +66,14 @@ $ curl 'http://localhost:8100/api?updates'
 # Status code will be 202 and the "queued" key will be present and true if an update was queued
 # If no update is needed, status code is 200 and there is no queued key present
 $ curl 'http://localhost:8100/api?refresh&updates&immediate&every=1h'
+{"data":{"checked":"2020-09-11T14:47:21+02:00","updates":[{"pkg":"snapper","oldVer":"0.8.12-1","newVer":"0.8.13-1","repo":"pacman"}]},"queued":true}
 # Can run directly as well (-every can be passed as argument)
 $ go-check-updates
 ```
 
 ## Example output
 
+Note this is what the API returns in the `data` key, the websocket returns exactly this data directly.
 ```json
 {
   "checked": "2020-06-01T23:10:23+02:00",
@@ -113,8 +131,6 @@ Status codes:
 ## Websocket
 
 Requires web server (daemon or systemd mode). Connect to `/ws` endpoint to receive
-data (same as the JSON file) when the cache file is updated.
+data (same as the JSON file) when updates are refreshed.
 
-## Known Issues
-
-- Is `/tmp/` a good place?
+Example usage in my [Polybar setup](https://github.com/cosandr/dotfiles/blob/master/dot_config/polybar/scripts/executable_go-check-updates-ws.py).

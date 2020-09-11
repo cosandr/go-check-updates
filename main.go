@@ -40,10 +40,13 @@ func main() {
 	var (
 		argDaemon          bool
 		argDebug           bool
+		argNoCache         bool
+		argNoLog           bool
+		argNoRefresh       bool
 		argQuiet           bool
 		argSystemd         bool
 		argCacheInterval   time.Duration
-		argCachePath       string
+		argCacheFile       string
 		argListenAddress   string
 		argLogFile         string
 		cacheFp            string
@@ -53,15 +56,40 @@ func main() {
 		listener           net.Listener
 	)
 
-	flag.BoolVar(&argDaemon, "daemon", false, "Run HTTP server as a daemon")
-	flag.BoolVar(&argDebug, "debug", false, "Set console log output to DEBUG")
 	flag.BoolVar(&argQuiet, "q", false, "Don't log to console")
+	flag.BoolVar(&argDaemon, "daemon", false, "Run HTTP server as a daemon")
 	flag.BoolVar(&argSystemd, "systemd", false, "Run HTTP server using systemd socket activation")
-	flag.DurationVar(&argCacheInterval, "cache.interval", defaultInterval, "Time interval between cache updates")
-	flag.StringVar(&argCachePath, "cache.path", defaultCache, "Path to update cache file, empty string to disable")
-	flag.StringVar(&argListenAddress, "web.listen-address", ":8100", "Web server listen address")
-	flag.StringVar(&argLogFile, "log.file", "", "Path to log file")
+	flag.BoolVar(&argDebug, "debug", false, "Set console log output to DEBUG")
+	flag.BoolVar(&argNoCache, "no-cache", false, "Don't use cache file, env NO_CACHE")
+	flag.BoolVar(&argNoLog, "no-log", false, "Don't log to file, env NO_LOG")
+	flag.BoolVar(&argNoRefresh, "no-refresh", false, "Don't auto-refresh, env NO_REFRESH")
+	flag.StringVar(&argCacheFile, "cache.file", defaultCache, "Path to update cache file, env CACHE_FILE")
+	flag.DurationVar(&argCacheInterval, "cache.interval", defaultInterval, "Time interval between cache updates, env CACHE_INTERVAL")
+	flag.StringVar(&argLogFile, "log.file", "", "Path to log file, env LOG_FILE")
+	flag.StringVar(&argListenAddress, "web.listen-address", ":8100", "Web server listen address, env LISTEN_ADDRESS")
 	flag.Parse()
+	// Get from environment
+	if v := os.Getenv("NO_CACHE"); v == "1" {
+		argNoCache = true
+	} else if v := os.Getenv("CACHE_FILE"); v != "" {
+		argCacheFile = v
+	}
+	if v := os.Getenv("NO_REFRESH"); v == "1" {
+		argNoLog = true
+	} else if v := os.Getenv("CACHE_INTERVAL"); v != "" {
+		argCacheInterval, err = time.ParseDuration(v)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	if v := os.Getenv("LISTEN_ADDRESS"); v != "" {
+		argListenAddress = v
+	}
+	if v := os.Getenv("NO_LOG"); v == "1" {
+		argNoLog = true
+	} else if v := os.Getenv("LOG_FILE"); v != "" {
+		argLogFile = v
+	}
 	//
 	// Logging setup
 	//
@@ -91,7 +119,7 @@ func main() {
 			LogLevels: levels,
 		})
 	}
-	if argLogFile != "" {
+	if !argNoLog {
 		file, err := os.OpenFile(argLogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
@@ -105,11 +133,11 @@ func main() {
 	//
 	// Logging setup
 	//
-	if argCachePath == "" {
+	if argNoCache {
 		cacheFp = ""
 		log.Info("No cache file")
-	} else if argCachePath != defaultCache {
-		cacheFp = argCachePath
+	} else if argCacheFile != defaultCache {
+		cacheFp = argCacheFile
 		if checkFileRead(cacheFp) && !checkFileWrite(cacheFp) {
 			log.Fatal("cache file is not writable")
 		}
@@ -144,17 +172,20 @@ func main() {
 	}
 
 	if argSystemd || argDaemon {
-		if argCacheInterval.Seconds() > 0 {
+		if !argNoRefresh {
+			log.Infof("Auto-refresh every %v", argCacheInterval)
 			go func() {
 				ticker := time.NewTicker(argCacheInterval)
 				for {
 					select {
 					case <-ticker.C:
-						log.Debug("autoUpdate: refresh")
+						log.Debug("auto-refresh ticker")
 						cache.Update()
 					}
 				}
 			}()
+		} else {
+			log.Info("No auto-refresh")
 		}
 		http.HandleFunc("/api", HandleAPI)
 		http.HandleFunc("/ws", HandleWS)

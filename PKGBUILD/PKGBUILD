@@ -6,7 +6,7 @@ pkgname=go-check-updates-git
 _pkgname="${pkgname%-git}"
 pkgver=9879e6b
 pkgrel=1
-pkgdesc="Dump pending updates in a json file"
+pkgdesc="Get pending updates through API"
 arch=("any")
 url="https://github.com/cosandr/go-check-updates"
 license=("MIT")
@@ -19,11 +19,6 @@ source=("git+$url")
 md5sums=("SKIP")
 install="${_pkgname}.install"
 
-# Change cache file and wait time durations
-_cache_file="/tmp/${_pkgname}.json"
-_log_file="/var/log/${_pkgname}.log"
-_wait_time="1h"
-
 pkgver() {
     cd "${_pkgname}"
   ( set -o pipefail
@@ -34,11 +29,11 @@ pkgver() {
 
 build() {
     cd "${_pkgname}"
-    ./setup.sh systemd-unit --pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./
-    ./setup.sh systemd-timer --pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./
-    ./setup.sh pacman-hook --pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./
+    _args="--pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./ --no-log --no-cache"
+    ./setup.sh systemd $_args
+    ./setup.sh pacman-hook $_args
     go mod vendor
-    go build -ldflags "-X main.defaultCache=${_cache_file} -X main.defaultWait=${_wait_time} -X main.defaultLog=${_log_file}" -o "${_pkgname}"
+    go build -o "${_pkgname}"
 }
 
 package() {
@@ -48,8 +43,6 @@ package() {
     install -Dm 755 "${_pkgname}" "${pkgdir}/usr/bin/${_pkgname}"
     install -m 644 "${_pkgname}.service" "${pkgdir}/usr/lib/systemd/system/"
     install -m 644 "${_pkgname}.socket" "${pkgdir}/usr/lib/systemd/system/"
-    install -m 644 "${_pkgname}-timer.service" "${pkgdir}/usr/lib/systemd/system/"
-    install -m 644 "${_pkgname}-timer.timer" "${pkgdir}/usr/lib/systemd/system/"
     install -m 644 "${_pkgname}.hook" "${pkgdir}/usr/share/libalpm/hooks/"
     install -Dm 644 LICENSE "${pkgdir}/usr/share/licenses/${_pkgname}/LICENSE"
 }

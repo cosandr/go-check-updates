@@ -8,8 +8,8 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
     exit 1
 fi
 
-OPTIONS=hno:
-LONGOPTS=help,dry-run,output:,listen-address:,pkg-name:,cache-file:,log-file:,bin-path:,systemd-path:,hook-path:
+OPTIONS=h
+LONGOPTS=help,bin-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -20,39 +20,41 @@ eval set -- "$PARSED"
 
 ### DEFAULTS ###
 
+PLATFORMS=("linux/386" "linux/amd64")
 PKG_NAME="go-check-updates"
 BIN_PATH="/usr/bin"
-SYSTEMD_PATH="/usr/lib/systemd/system"
-HOOK_PATH="/usr/share/libalpm/hooks"
-LOG_FILE="/var/log/${PKG_NAME}.log"
 CACHE_FILE="/tmp/${PKG_NAME}.json"
+CACHE_INTERVAL="12h"
+HOOK_PATH="/usr/share/libalpm/hooks"
 LISTEN_ADDRESS="/run/$PKG_NAME.sock"
-LOG_FILE_CHANGED=0
-CACHE_FILE_CHANGED=0
-LISTEN_ADDRESS_CHANGED=0
+LOG_FILE="/var/log/${PKG_NAME}.log"
+SYSTEMD_PATH="/usr/lib/systemd/system"
 
-function print_help () {
+print_help () {
 # Using a here doc with standard out.
-cat <<-END
-Usage $0: COMMAND [OPTIONS]
+echo "Usage $0: COMMAND [OPTIONS]
 
 Commands:
+build-all             Build for all platforms (${PLATFORMS[*]})
 install               Build and install binary
-systemd-unit          Create and install systemd socket and service files
-systemd-timer         Create and install systemd timer and service files
-pacman-hook           Create and install pacman hooks
 pacman-build          Copy required files to build a pacman package from local files
+pacman-hook           Create and install pacman hooks
+systemd               Create and install systemd socket and service files
 
 Options:
 -h    --help            Show this message
-      --listen-address  Listen address (default $LISTEN_ADDRESS)
-      --pkg-name        Change package name (default $PKG_NAME)
-      --cache-file      Change default cache file location (default $CACHE_FILE)
-      --log-file        Change default log file location (default $LOG_FILE)
       --bin-path        Path where the binary is installed (default $BIN_PATH)
-      --systemd-path    Path where systemd units are installed (default $SYSTEMD_PATH)
+      --cache-file      Change default cache file location (default $CACHE_FILE)
+      --cache-interval  Change auto-refresh interval (default $CACHE_INTERVAL)
       --hook-path       Path where pacman hooks are installed (default $HOOK_PATH)
-END
+      --listen-address  Listen address (default $LISTEN_ADDRESS)
+      --log-file        Change default log file location (default $LOG_FILE)
+      --no-cache        Disable cache file
+      --no-log          Disable log file
+      --no-refresh      Disable auto-refresh
+      --pkg-name        Change package name (default $PKG_NAME)
+      --systemd-path    Path where systemd units are installed (default $SYSTEMD_PATH)
+"
 }
 
 while true; do
@@ -61,35 +63,51 @@ while true; do
             print_help
             exit 0
             ;;
-        --pkg-name)
-            PKG_NAME="$2"
-            shift 2
-            ;;
-        --listen-address)
-            LISTEN_ADDRESS="$2"
-            LISTEN_ADDRESS_CHANGED=1
-            shift 2
-            ;;
-        --log-file)
-            LOG_FILE="$2"
-            LOG_FILE_CHANGED=1
-            shift 2
-            ;;
-        --cache-file)
-            CACHE_FILE="$2"
-            CACHE_FILE_CHANGED=1
-            shift 2
-            ;;
         --bin-path)
             BIN_PATH="$2"
             shift 2
             ;;
-        --systemd-path)
-            SYSTEMD_PATH="$2"
+        --cache-file)
+            CACHE_FILE="$2"
+            shift 2
+            ;;
+        --cache-interval)
+            CACHE_INTERVAL="$2"
             shift 2
             ;;
         --hook-path)
             HOOK_PATH="$2"
+            shift 2
+            ;;
+        --listen-address)
+            LISTEN_ADDRESS="$2"
+            shift 2
+            ;;
+        --log-file)
+            LOG_FILE="$2"
+            shift 2
+            ;;
+        --no-cache)
+            CACHE_FILE=""
+            shift
+            ;;
+        --no-log)
+            LOG_FILE=""
+            shift
+            ;;
+        --no-refresh)
+            CACHE_INTERVAL=""
+            shift
+            ;;
+        --pkg-name)
+            PKG_NAME="$2"
+            LOG_FILE="/var/log/${PKG_NAME}.log"
+            CACHE_FILE="/tmp/${PKG_NAME}.json"
+            LISTEN_ADDRESS="/run/$PKG_NAME.sock"
+            shift 2
+            ;;
+        --systemd-path)
+            SYSTEMD_PATH="$2"
             shift 2
             ;;
         --)
@@ -108,42 +126,47 @@ if [[ $# -ne 1 ]]; then
     exit 4
 fi
 
-if [[ $LOG_FILE_CHANGED -eq 0 ]]; then
-    LOG_FILE="/var/log/${PKG_NAME}.log"
-fi
-
-if [[ $CACHE_FILE_CHANGED -eq 0 ]]; then
-    CACHE_FILE="/tmp/${PKG_NAME}.json"
-fi
-
-if [[ $LISTEN_ADDRESS_CHANGED -eq 0 ]]; then
-    LISTEN_ADDRESS="/run/$PKG_NAME.sock"
-fi
-
 PKG_PATH="$BIN_PATH/$PKG_NAME"
 SOCKET_FILE="$SYSTEMD_PATH/$PKG_NAME.socket"
 SERVICE_FILE="$SYSTEMD_PATH/$PKG_NAME.service"
-TIMER_FILE="$SYSTEMD_PATH/$PKG_NAME-timer.timer"
-TIMER_SERVICE="$SYSTEMD_PATH/$PKG_NAME-timer.service"
 HOOK_FILE="$HOOK_PATH/$PKG_NAME.hook"
 
-
-# We have a unix socket
-if [[ $LISTEN_ADDRESS == /* ]]; then
-    CURL_ADDRESS="--unix-socket $LISTEN_ADDRESS"
-# Listen anywhere address, add localhost
-elif [[ $LISTEN_ADDRESS == :* ]]; then
-    CURL_ADDRESS="localhost${LISTEN_ADDRESS}"
-# Use as is
-else
-    CURL_ADDRESS="$LISTEN_ADDRESS"
-fi
-
 case "$1" in
-    install)
-        go build -o "$PKG_PATH" -ldflags "-X main.defaultCache=${CACHE_FILE} -X main.defaultLog=${LOG_FILE}"
+    build-all)
+        for platform in "${PLATFORMS[@]}"
+        do
+            IFS="/" read -r -a platform_split <<< "$platform"
+            GOOS=${platform_split[0]}
+            GOARCH=${platform_split[1]}
+            output_name=$PKG_NAME'-'$GOOS'-'$GOARCH
+            echo "Building $output_name"
+            if ! env GOOS="$GOOS" GOARCH="$GOARCH" go build -o $output_name; then
+                echo 'Build failed'
+                exit 1
+            fi
+        done
         ;;
-    systemd-unit)
+    install)
+        go build -o "$PKG_PATH"
+        ;;
+    systemd)
+        _nl=$'\n'
+        systemd_env=""
+        if [[ -n $CACHE_FILE ]]; then
+            systemd_env+="Environment=CACHE_FILE=\"$CACHE_FILE\"${_nl}"
+        else
+            systemd_env+="Environment=NO_CACHE=1${_nl}"
+        fi
+        if [[ -n $CACHE_INTERVAL ]]; then
+            systemd_env+="Environment=CACHE_INTERVAL=\"$CACHE_INTERVAL\"${_nl}"
+        else
+            systemd_env+="Environment=NO_REFRESH=1${_nl}"
+        fi
+        if [[ -n $LOG_FILE ]]; then
+            systemd_env+="Environment=LOG_FILE=\"$LOG_FILE\"${_nl}"
+        else
+            systemd_env+="Environment=NO_LOG=1${_nl}"
+        fi
         set +e
         echo -e "\n########## Systemd socket ##########\n"
         cat <<EOF | tee "$SOCKET_FILE"
@@ -162,39 +185,26 @@ After=network.target
 Requires=network.target
 
 [Service]
+$systemd_env
 ExecStart=$PKG_PATH -systemd
 EOF
         ;;
-    systemd-timer)
-        echo -e "\n########## Systemd timer ##########\n"
-        cat <<EOF | tee "$TIMER_FILE"
-[Unit]
-Description=Run $PKG_NAME
-
-[Timer]
-# Every hour
-OnBootSec=10s
-OnUnitActiveSec=1h
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-EOF
-        echo -e "\n########## Systemd timer service ##########\n"
-        cat <<EOF | tee "$TIMER_SERVICE"
-[Unit]
-Description=Run $PKG_NAME
-Requires=$PKG_NAME.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/curl $CURL_ADDRESS --silent --output /dev/null 'http://localhost/api?refresh&immediate'
-
-[Install]
-WantedBy=multi-user.target
-EOF
-        ;;
     pacman-hook)
+        query="?refresh&immediate&every=5m"
+        # We have a unix socket
+        if [[ $LISTEN_ADDRESS == /* ]]; then
+            CURL_ADDRESS="--unix-socket $LISTEN_ADDRESS"
+            GET_URL="http://localhost/api$query"
+        # Listen anywhere address, add localhost
+        elif [[ $LISTEN_ADDRESS == :* || $LISTEN_ADDRESS == 0.0.0.0:* ]]; then
+            CURL_ADDRESS=""
+            IFS=":" read -r -a address_split <<< "$LISTEN_ADDRESS"
+            GET_URL="http://localhost:${address_split[1]}/api$query"
+        # Use as is
+        else
+            CURL_ADDRESS=""
+            GET_URL="http://${LISTEN_ADDRESS}/api$query"
+        fi
         echo -e "\n########## Pacman hook ##########\n"
         cat <<EOF | tee "$HOOK_FILE"
 [Trigger]
@@ -206,7 +216,7 @@ Target = *
 [Action]
 Description = Queue cache update for $PKG_NAME
 When = PostTransaction
-Exec = /usr/bin/curl $CURL_ADDRESS --silent --output /dev/null 'http://localhost/api?refresh&immediate'
+Exec = /usr/bin/curl $CURL_ADDRESS --silent --output /dev/null '$GET_URL'
 Depends = curl
 EOF
         ;;

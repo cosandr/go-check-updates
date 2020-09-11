@@ -1,4 +1,4 @@
-go-check-updates
+go-check-updates*
 .vscode
 *.log
 .idea
