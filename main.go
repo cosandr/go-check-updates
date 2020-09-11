@@ -23,8 +23,7 @@ const (
 
 var (
 	distro   string
-	globalWg sync.WaitGroup
-	upgrader = websocket.Upgrader{}
+	upgrader websocket.Upgrader
 	cache    InternalCache
 )
 
@@ -34,23 +33,24 @@ func init() {
 		log.Panicln(err)
 	}
 	distro = ret
+	upgrader = websocket.Upgrader{}
 }
 
 func main() {
 	var (
-		argDaemon        bool
-		argDebug         bool
-		argQuiet         bool
-		argSystemd       bool
-		argCacheInterval time.Duration
-		argCachePath     string
-		argListenAddress string
-		argLogFile       string
-		// argLogLevel        string
+		argDaemon          bool
+		argDebug           bool
+		argQuiet           bool
+		argSystemd         bool
+		argCacheInterval   time.Duration
+		argCachePath       string
+		argListenAddress   string
+		argLogFile         string
 		cacheFp            string
 		defaultInterval, _ = time.ParseDuration(defaultWait)
 		defaultCache, _    = getCachePath()
 		err                error
+		listener           net.Listener
 	)
 
 	flag.BoolVar(&argDaemon, "daemon", false, "Run HTTP server as a daemon")
@@ -58,10 +58,9 @@ func main() {
 	flag.BoolVar(&argQuiet, "q", false, "Don't log to console")
 	flag.BoolVar(&argSystemd, "systemd", false, "Run HTTP server using systemd socket activation")
 	flag.DurationVar(&argCacheInterval, "cache.interval", defaultInterval, "Time interval between cache updates")
-	flag.StringVar(&argCachePath, "cache.path", defaultCache, "Path to update cache file")
+	flag.StringVar(&argCachePath, "cache.path", defaultCache, "Path to update cache file, empty string to disable")
 	flag.StringVar(&argListenAddress, "web.listen-address", ":8100", "Web server listen address")
 	flag.StringVar(&argLogFile, "log.file", "", "Path to log file")
-	// flag.StringVar(&argLogLevel, "log.level", defaultLog, "File logging level")
 	flag.Parse()
 	//
 	// Logging setup
@@ -106,24 +105,27 @@ func main() {
 	//
 	// Logging setup
 	//
-	if argCachePath != defaultCache {
+	if argCachePath == "" {
+		cacheFp = ""
+		log.Info("No cache file")
+	} else if argCachePath != defaultCache {
 		cacheFp = argCachePath
 		if checkFileRead(cacheFp) && !checkFileWrite(cacheFp) {
 			log.Fatal("cache file is not writable")
 		}
+		log.Infof("Using provided cache file: %s", cacheFp)
 	} else {
 		cacheFp, err = getCachePath()
 		if err != nil {
 			log.Fatalf("No suitable cache file: %v", err)
 		}
+		log.Infof("Using auto path for cache file: %s", cacheFp)
 	}
 	cache = InternalCache{
 		Cond: sync.NewCond(&sync.Mutex{}),
 		f:    api.File{},
 		fp:   cacheFp,
 	}
-	log.Infof("Using cache file: %s", cache.fp)
-	var listener net.Listener
 	if argSystemd {
 		listeners, err := activation.Listeners()
 		if err != nil {
@@ -142,11 +144,22 @@ func main() {
 	}
 
 	if argSystemd || argDaemon {
+		if argCacheInterval.Seconds() > 0 {
+			go func() {
+				ticker := time.NewTicker(argCacheInterval)
+				for {
+					select {
+					case <-ticker.C:
+						log.Debug("autoUpdate: refresh")
+						cache.Update()
+					}
+				}
+			}()
+		}
 		http.HandleFunc("/api", HandleAPI)
 		http.HandleFunc("/ws", HandleWS)
 		log.Infof("Listening on %s", listener.Addr().String())
 		err = http.Serve(listener, nil)
-		globalWg.Wait()
 		if err != nil {
 			log.Errorf("HTTP serve error: %v", err)
 			os.Exit(2)

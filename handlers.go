@@ -62,11 +62,7 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 		if willRefresh {
 			log.Debug("HandleAPI: Cache file refreshing")
 			if immediate {
-				globalWg.Add(1)
-				go func() {
-					_ = cache.Update()
-					globalWg.Done()
-				}()
+				go cache.Update()
 				log.Debug("HandleAPI: Cache file update queued")
 				tmp := true
 				resp.Queued = &tmp

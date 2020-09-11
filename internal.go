@@ -20,7 +20,7 @@ type InternalCache struct {
 	fp string
 }
 
-// Update the internal cache
+// Update the internal cache and optional file
 func (ic *InternalCache) Update() error {
 	var updates []api.Update
 	var err error
@@ -43,6 +43,9 @@ func (ic *InternalCache) Update() error {
 	})
 	ic.f.Updates = updates
 	ic.f.Checked = time.Now().Format(time.RFC3339)
+	if ic.fp != "" {
+		err = ic.Write()
+	}
 	// log.Debugf("InternalCache.Update: %v", ic.f)
 	ic.Broadcast()
 	log.Debug("InternalCache.Update: broadcast")
@@ -54,7 +57,9 @@ func (ic *InternalCache) Update() error {
 func (ic *InternalCache) GetFile() (api.File, error) {
 	// log.Debugf("InternalCache.GetFile: %v", ic.f)
 	if ic.f.IsEmpty() {
-		if checkFileRead(ic.fp) {
+		if ic.fp != "" {
+			return api.File{}, fmt.Errorf("cache is empty and cache file is disabled")
+		} else if checkFileRead(ic.fp) {
 			log.Debugf("InternalCache.GetFile, cache empty, reading from %s", ic.fp)
 			err := ic.Read()
 			if err != nil {
@@ -72,6 +77,9 @@ func (ic *InternalCache) GetFile() (api.File, error) {
 // Malformed files are considered invalid and will be replaced
 func (ic *InternalCache) NeedsUpdate(interval time.Duration) bool {
 	if ic.f.IsEmpty() {
+		if ic.fp == "" {
+			return true
+		}
 		err := ic.Read()
 		// Cannot read, update
 		if err != nil {
@@ -92,6 +100,9 @@ func (ic *InternalCache) NeedsUpdate(interval time.Duration) bool {
 
 // Read file to internal cache
 func (ic *InternalCache) Read() error {
+	if ic.fp == "" {
+		return fmt.Errorf("cache file disabled")
+	}
 	bytes, err := ioutil.ReadFile(ic.fp)
 	if err != nil {
 		return err
@@ -101,6 +112,9 @@ func (ic *InternalCache) Read() error {
 
 // Write internal cache to file
 func (ic *InternalCache) Write() error {
+	if ic.fp == "" {
+		return fmt.Errorf("cache file disabled")
+	}
 	log.Debug("InternalCache.Write: marshal file")
 	bytes, err := json.Marshal(&ic.f)
 	if err != nil {
