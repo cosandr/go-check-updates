@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/coreos/go-systemd/v22/activation"
@@ -150,9 +149,9 @@ func main() {
 		log.Infof("Using auto path for cache file: %s", cacheFp)
 	}
 	cache = InternalCache{
-		Cond: sync.NewCond(&sync.Mutex{}),
-		f:    api.File{},
-		fp:   cacheFp,
+		f:  api.File{},
+		fp: cacheFp,
+		ws: &WsFeed{listeners: make(map[string]chan struct{})},
 	}
 	if argSystemd {
 		listeners, err := activation.Listeners()

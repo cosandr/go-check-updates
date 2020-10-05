@@ -19,8 +19,8 @@ import (
 func TestWS(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	cache = InternalCache{
-		Cond: sync.NewCond(&sync.Mutex{}),
-		f:    api.File{},
+		f:  api.File{},
+		ws: &WsFeed{listeners: make(map[string]chan struct{})},
 	}
 	addr := "127.0.0.1:1234"
 	clientAddr := url.URL{Scheme: "ws", Host: addr, Path: "/ws"}
@@ -58,7 +58,7 @@ func TestWS(t *testing.T) {
 			}
 			cache.f.Updates = updates
 			cache.f.Checked = time.Now().Format(time.RFC3339)
-			cache.Broadcast()
+			cache.ws.Broadcast()
 			sent[i] = len(updates)
 			log.Infof("Set new updates iter %d", i)
 			newDur := time.Duration(rand.Intn(10)) * time.Second

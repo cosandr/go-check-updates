@@ -12,12 +12,67 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// Subscription holds data for a listener
+type Subscription struct {
+	feed *WsFeed
+	name string
+	ch   chan struct{}
+	once sync.Once
+}
+
+// Unsubscribe removes listener from feed
+func (s *Subscription) Unsubscribe() {
+	s.once.Do(func() {
+		s.feed.remove(s.name)
+	})
+}
+
+// WsFeed holds data for waking up websocket goroutines
+//
+// Thanks to https://rauljordan.com/2019/09/23/how-to-write-an-event-feed-library.html
+type WsFeed struct {
+	L         sync.Mutex
+	listeners map[string]chan struct{}
+}
+
+func (f *WsFeed) remove(name string) {
+	f.L.Lock()
+	defer f.L.Unlock()
+	delete(f.listeners, name)
+	log.Debugf("WsFeed.remove: %s", name)
+}
+
+// Broadcast wakes up all listeners
+func (f *WsFeed) Broadcast() {
+	f.L.Lock()
+	defer f.L.Unlock()
+	var empty struct{}
+	for name, lis := range f.listeners {
+		log.Debugf("WsFeed.Broadcast: %s", name)
+		lis <- empty
+	}
+}
+
+// Subscribe registers new listener and returns its subscription
+func (f *WsFeed) Subscribe(name string) *Subscription {
+	f.L.Lock()
+	defer f.L.Unlock()
+	ch := make(chan struct{}, 1)
+	f.listeners[name] = ch
+	log.Debugf("WsFeed.Subscribe: %s", name)
+	return &Subscription{
+		feed: f,
+		name: name,
+		ch:   ch,
+	}
+}
+
 // InternalCache stores information about the updates cache
-// Contains a sync.Cond for threadsafe operations
+// Contains a WsFeed for threadsafe operations
 type InternalCache struct {
-	*sync.Cond
 	f  api.File
 	fp string
+	ws *WsFeed
 }
 
 // Update the internal cache and optional file
@@ -44,8 +99,8 @@ func (ic *InternalCache) Update() error {
 	if ic.fp != "" {
 		err = ic.Write()
 	}
-	ic.Broadcast()
-	log.Debug("InternalCache.Update: broadcast")
+	ic.ws.Broadcast()
+	log.Debug("WS broadcast")
 	return nil
 }
 

@@ -50,49 +50,17 @@ func wsReader(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn
 
 func wsWriter(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn, wg *sync.WaitGroup) {
 	remoteName := ws.RemoteAddr().String()
-	pingTicker := time.NewTicker(pingPeriod)
-	var lastChecked string
-	var localWg sync.WaitGroup
+	sub := cache.ws.Subscribe(remoteName)
 	defer func() {
+		sub.Unsubscribe()
 		log.Debugf("wsWriter (%s): close", remoteName)
 		cancel()
-		pingTicker.Stop()
 		wg.Done()
 	}()
-	localWg.Add(1)
+	// Ping-Pong goroutine
 	go func() {
-		defer localWg.Done()
-		for {
-			select {
-			case <-ctx.Done():
-				log.Debugf("wsWriter (%s): message sender closed externally", remoteName)
-				return
-			default:
-				cache.L.Lock()
-				log.Debugf("wsWriter (%s): lock acquired", remoteName)
-				for cache.f.Checked == "" || cache.f.Checked == lastChecked {
-					log.Debugf("wsWriter (%s): waiting", remoteName)
-					cache.Wait()
-				}
-				log.Debugf("wsWriter (%s): sending message", remoteName)
-				ws.SetWriteDeadline(time.Now().Add(writeWait))
-				err := ws.WriteJSON(&cache.f)
-				if err != nil {
-					if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
-						log.Errorf("wsWriter (%s): cannot send message: %v", remoteName, err)
-					}
-					cancel()
-					return
-				}
-				lastChecked = cache.f.Checked
-				cache.L.Unlock()
-				log.Debugf("wsWriter (%s): unlock", remoteName)
-			}
-		}
-	}()
-	localWg.Add(1)
-	go func() {
-		defer localWg.Done()
+		pingTicker := time.NewTicker(pingPeriod)
+		defer pingTicker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
@@ -103,12 +71,32 @@ func wsWriter(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn
 				ws.SetWriteDeadline(time.Now().Add(writeWait))
 				err := ws.WriteMessage(websocket.PingMessage, nil)
 				if err != nil {
+					if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
+						log.Errorf("wsWriter (%s): cannot send heartbeat: %v", remoteName, err)
+					}
 					cancel()
-					log.Errorf("wsWriter (%s): cannot send heartbeat: %v", remoteName, err)
 					return
 				}
 			}
 		}
 	}()
-	localWg.Wait()
+	// Main loop, wait for event and send updates to client
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debugf("wsWriter (%s): message sender closed externally", remoteName)
+			return
+		case <-sub.ch:
+			log.Debugf("wsWriter (%s): sending message", remoteName)
+			ws.SetWriteDeadline(time.Now().Add(writeWait))
+			err := ws.WriteJSON(&cache.f)
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
+					log.Errorf("wsWriter (%s): cannot send message: %v", remoteName, err)
+				}
+				cancel()
+				return
+			}
+		}
+	}
 }
