@@ -4,8 +4,6 @@ github.com/coreos/go-systemd/v22/activation
 # github.com/gorilla/websocket v1.4.2
 ## explicit
 github.com/gorilla/websocket
-# github.com/konsorten/go-windows-terminal-sequences v1.0.3
-## explicit
 # github.com/sirupsen/logrus v1.7.0
 ## explicit
 github.com/sirupsen/logrus
