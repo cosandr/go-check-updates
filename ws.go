@@ -38,7 +38,9 @@ func wsReader(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn
 		default:
 			_, _, err := ws.ReadMessage()
 			if err != nil {
-				log.Warnf("wsReader (%s): could not read Pong: %v", remoteName, err)
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
+					log.Warnf("wsReader (%s): could not read Pong: %v", remoteName, err)
+				}
 				cancel()
 				return
 			}
@@ -76,7 +78,9 @@ func wsWriter(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn
 				ws.SetWriteDeadline(time.Now().Add(writeWait))
 				err := ws.WriteJSON(&cache.f)
 				if err != nil {
-					log.Errorf("wsWriter (%s): cannot send message: %v", remoteName, err)
+					if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
+						log.Errorf("wsWriter (%s): cannot send message: %v", remoteName, err)
+					}
 					cancel()
 					return
 				}
