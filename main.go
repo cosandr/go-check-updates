@@ -151,7 +151,7 @@ func main() {
 	cache = InternalCache{
 		f:  api.File{},
 		fp: cacheFp,
-		ws: &WsFeed{listeners: make(map[string]chan struct{})},
+		ws: &WsFeed{listeners: make(map[uint16]chan struct{})},
 	}
 	if argSystemd {
 		listeners, err := activation.Listeners()

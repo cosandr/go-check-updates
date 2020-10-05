@@ -15,7 +15,7 @@ import (
 // Subscription holds data for a listener
 type Subscription struct {
 	feed *WsFeed
-	name string
+	idx  uint16
 	ch   chan struct{}
 	once sync.Once
 }
@@ -23,7 +23,7 @@ type Subscription struct {
 // Unsubscribe removes listener from feed
 func (s *Subscription) Unsubscribe() {
 	s.once.Do(func() {
-		s.feed.remove(s.name)
+		s.feed.remove(s.idx)
 	})
 }
 
@@ -32,14 +32,15 @@ func (s *Subscription) Unsubscribe() {
 // Thanks to https://rauljordan.com/2019/09/23/how-to-write-an-event-feed-library.html
 type WsFeed struct {
 	L         sync.Mutex
-	listeners map[string]chan struct{}
+	listeners map[uint16]chan struct{}
+	count     uint16
 }
 
-func (f *WsFeed) remove(name string) {
+func (f *WsFeed) remove(i uint16) {
 	f.L.Lock()
 	defer f.L.Unlock()
-	delete(f.listeners, name)
-	log.Debugf("WsFeed.remove: %s", name)
+	delete(f.listeners, i)
+	log.Debugf("WsFeed.remove: %d", i)
 }
 
 // Broadcast wakes up all listeners
@@ -47,22 +48,23 @@ func (f *WsFeed) Broadcast() {
 	f.L.Lock()
 	defer f.L.Unlock()
 	var empty struct{}
-	for name, lis := range f.listeners {
-		log.Debugf("WsFeed.Broadcast: %s", name)
+	for idx, lis := range f.listeners {
+		log.Debugf("WsFeed.Broadcast: %d", idx)
 		lis <- empty
 	}
 }
 
 // Subscribe registers new listener and returns its subscription
-func (f *WsFeed) Subscribe(name string) *Subscription {
+func (f *WsFeed) Subscribe() *Subscription {
 	f.L.Lock()
 	defer f.L.Unlock()
 	ch := make(chan struct{}, 1)
-	f.listeners[name] = ch
-	log.Debugf("WsFeed.Subscribe: %s", name)
+	f.count++
+	f.listeners[f.count] = ch
+	log.Debugf("WsFeed.Subscribe: %d", f.count)
 	return &Subscription{
 		feed: f,
-		name: name,
+		idx:  f.count,
 		ch:   ch,
 	}
 }

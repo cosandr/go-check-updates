@@ -50,7 +50,7 @@ func wsReader(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn
 
 func wsWriter(ctx context.Context, cancel context.CancelFunc, ws *websocket.Conn, wg *sync.WaitGroup) {
 	remoteName := ws.RemoteAddr().String()
-	sub := cache.ws.Subscribe(remoteName)
+	sub := cache.ws.Subscribe()
 	defer func() {
 		sub.Unsubscribe()
 		log.Debugf("wsWriter (%s): close", remoteName)

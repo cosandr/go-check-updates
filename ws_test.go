@@ -20,7 +20,7 @@ func TestWS(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	cache = InternalCache{
 		f:  api.File{},
-		ws: &WsFeed{listeners: make(map[string]chan struct{})},
+		ws: &WsFeed{listeners: make(map[uint16]chan struct{})},
 	}
 	addr := "127.0.0.1:1234"
 	clientAddr := url.URL{Scheme: "ws", Host: addr, Path: "/ws"}
