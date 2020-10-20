@@ -140,7 +140,7 @@ case "$1" in
             GOARCH=${platform_split[1]}
             output_name=$PKG_NAME'-'$GOOS'-'$GOARCH
             echo "Building $output_name"
-            if ! env GOOS="$GOOS" GOARCH="$GOARCH" go build -o $output_name; then
+            if ! env CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -o $output_name; then
                 echo 'Build failed'
                 exit 1
             fi
