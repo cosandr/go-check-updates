@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -113,7 +114,7 @@ func main() {
 			LogLevels: levels,
 		})
 	}
-	if !argNoLog {
+	if !argNoLog && argLogFile != "" {
 		file, err := os.OpenFile(argLogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
@@ -205,7 +206,9 @@ func main() {
 					select {
 					case <-ticker.C:
 						log.Debug("auto-refresh ticker")
-						cache.Update()
+						if err = cache.Update(); err != nil {
+							log.Error(err)
+						}
 					}
 				}
 			}()
@@ -229,6 +232,24 @@ func main() {
 		return
 	}
 
-	cache.Update()
+	err = cache.Update()
+	if err != nil {
+		fmt.Printf("Refresh failed: %v", err)
+		return
+	}
+	// Print to console if we aren't using cache
+	if argNoCache {
+		for _, u := range cache.f.Updates {
+			tmp := u.Pkg
+			if u.OldVer != "" {
+				tmp += fmt.Sprintf(" %s", u.OldVer)
+			}
+			tmp += fmt.Sprintf(" -> %s", u.NewVer)
+			if u.Repo != "" {
+				tmp += fmt.Sprintf(" [%s]", u.Repo)
+			}
+			fmt.Printf("%s\n", tmp)
+		}
+	}
 
 }
