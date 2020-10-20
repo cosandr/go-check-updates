@@ -9,6 +9,7 @@ import (
 	"path"
 	"regexp"
 
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 )
 
@@ -89,9 +90,17 @@ func checkFileExists(path string) bool {
 }
 
 func runCmd(name string, args ...string) (string, error) {
+	log.Debugf("runCmd %s %s", name, args)
 	var buf bytes.Buffer
 	cmd := exec.Command(name, args...)
 	cmd.Stdout = &buf
 	err := cmd.Run()
 	return buf.String(), err
+}
+
+// checkCmd returns true if '<name> --help' ran successfully
+func checkCmd(name string) bool {
+	cmd := exec.Command(name, "--help")
+	err := cmd.Run()
+	return err == nil
 }
