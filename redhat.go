@@ -21,6 +21,8 @@ import (
 	"github.com/cosandr/go-check-updates/api"
 )
 
+var reYum = regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<repo>\S+)\s+(?P<ver>\S+)\s*$`)
+
 func runYum(name string) (retStr string, err error) {
 	retStr, err = runCmd(name, "-e0", "-d0", "check-update")
 	if err != nil {
@@ -49,8 +51,7 @@ func UpdateDnf() (updates []api.Update, err error) {
 	if err != nil {
 		return
 	}
-	re := regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<repo>\S+)\s+(?P<ver>\S+)\s*$`)
-	for _, m := range re.FindAllStringSubmatch(rawOut, -1) {
+	for _, m := range reYum.FindAllStringSubmatch(rawOut, -1) {
 		var u api.Update
 		u.Pkg = m[1]
 		u.NewVer = m[2]

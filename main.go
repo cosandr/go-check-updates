@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/v22/activation"
-	"github.com/cosandr/go-check-updates/api"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/writer"
+
+	"github.com/cosandr/go-check-updates/api"
 )
 
 const (
@@ -21,19 +22,11 @@ const (
 )
 
 var (
-	distro   string
-	upgrader websocket.Upgrader
-	cache    InternalCache
+	updateFunc func() (updates []api.Update, err error)
+	aur        helper
+	upgrader   = websocket.Upgrader{}
+	cache      InternalCache
 )
-
-func init() {
-	ret, err := getDistro()
-	if err != nil {
-		log.Panicln(err)
-	}
-	distro = ret
-	upgrader = websocket.Upgrader{}
-}
 
 func main() {
 	var (
@@ -48,6 +41,7 @@ func main() {
 		argCacheFile       string
 		argListenAddress   string
 		argLogFile         string
+		argAurHelper       string
 		cacheFp            string
 		defaultInterval, _ = time.ParseDuration(defaultWait)
 		defaultCache, _    = getCachePath()
@@ -62,6 +56,7 @@ func main() {
 	flag.BoolVar(&argNoCache, "no-cache", false, "Don't use cache file, env NO_CACHE")
 	flag.BoolVar(&argNoLog, "no-log", false, "Don't log to file, env NO_LOG")
 	flag.BoolVar(&argNoRefresh, "no-refresh", false, "Don't auto-refresh, env NO_REFRESH")
+	flag.StringVar(&argAurHelper, "aur", "", "Override AUR helper (Arch Linux)")
 	flag.StringVar(&argCacheFile, "cache.file", defaultCache, "Path to update cache file, env CACHE_FILE")
 	flag.DurationVar(&argCacheInterval, "cache.interval", defaultInterval, "Time interval between cache updates, env CACHE_INTERVAL")
 	flag.StringVar(&argLogFile, "log.file", "", "Path to log file, env LOG_FILE")
@@ -132,6 +127,37 @@ func main() {
 	//
 	// Logging setup
 	//
+
+	// Setup distro specific stuff
+	distro, err := getDistro()
+	if err != nil {
+		log.Panicln(err)
+	}
+	switch distro {
+	case "fedora":
+		updateFunc = UpdateDnf
+	case "arch":
+		updateFunc = UpdateArch
+		for _, h := range supportedHelpers {
+			if !checkCmd(h.name) {
+				continue
+			}
+			if argAurHelper != "" && h.name != argAurHelper {
+				log.Infof("%s is available but %s was requested", h.name, argAurHelper)
+				continue
+			}
+			aur = h
+			break
+		}
+		if aur.name == "" {
+			log.Warn("no supported AUR helper found")
+		} else {
+			log.Infof("AUR helper: %s", aur.name)
+		}
+	default:
+		log.Fatalf("unsupported distro %s", distro)
+	}
+
 	if argNoCache {
 		cacheFp = ""
 		log.Info("No cache file")

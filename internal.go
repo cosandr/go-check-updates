@@ -80,18 +80,14 @@ type InternalCache struct {
 // Update the internal cache and optional file
 func (ic *InternalCache) Update() error {
 	log.Info("Refreshing")
-	var updates []api.Update
-	var err error
-	switch distro {
-	case "fedora":
-		updates, err = UpdateDnf()
-	case "arch":
-		updates, err = UpdateArch()
-	default:
-		return fmt.Errorf("unsupported distro %s", distro)
-	}
+	updates, err := updateFunc()
 	if err != nil {
-		return err
+		// Something failed and we got nothing
+		if len(updates) == 0 {
+			return err
+		}
+		// Partial failure, continue
+		log.Error(err)
 	}
 	sort.Slice(updates, func(i, j int) bool {
 		return updates[i].Pkg < updates[j].Pkg

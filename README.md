@@ -25,6 +25,7 @@ Manager | Pkg | Old Ver | New Ver | Repo
 --- | --- | --- | --- | ----
 pacman | Y | Y | Y | N*
 pikaur | Y | Y | Y | N*
+yay | Y | Y | Y | N*
 dnf/yum | Y | N | Y | Y
 
 \* Repo is simply set to "aur" or "pacman"

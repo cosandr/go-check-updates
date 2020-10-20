@@ -8,12 +8,7 @@ linux 5.4.6.arch3-1 -> 5.4.7.arch1-1
 linux-headers 5.4.6.arch3-1 -> 5.4.7.arch1-1
 shellcheck 0.7.0-82 -> 0.7.0-83
 ##########
-$ checkupdates && pikaur -Qua 2>/dev/null
-libarchive 3.4.0-3 -> 3.4.1-1
-libjpeg-turbo 2.0.3-1 -> 2.0.4-1
-linux 5.4.6.arch3-1 -> 5.4.7.arch1-1
-linux-headers 5.4.6.arch3-1 -> 5.4.7.arch1-1
-shellcheck 0.7.0-82 -> 0.7.0-83
+$ pikaur -Qua 2>/dev/null
  corefreq-git                          1.70-1               -> 1.71-1
  pikaur                                1.5.7-1              -> 1.5.8-1
 ##########
@@ -35,52 +30,18 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
-	"sync"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/cosandr/go-check-updates/api"
 )
 
-func procPacman(updates *[]api.Update, wg *sync.WaitGroup, err *error) {
-	raw, errPac := runCmd("checkupdates")
-	if errPac != nil {
-		// Exit code 2 is OK, no updates
-		if exitError, ok := errPac.(*exec.ExitError); ok {
-			if exitError.ExitCode() != 2 {
-				*err = errPac
-			}
-		}
-		wg.Done()
-		return
-	}
-	re := regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<oldver>\S+)\s+->\s+(?P<newver>\S+)\s*$`)
-	for _, m := range re.FindAllStringSubmatch(raw, -1) {
-		var u api.Update
-		u.Pkg = m[1]
-		u.OldVer = m[2]
-		u.NewVer = m[3]
-		u.Repo = "pacman"
-		*updates = append(*updates, u)
-	}
-	wg.Done()
-}
-
-func procPikaur(updates *[]api.Update, wg *sync.WaitGroup, err *error) {
-	raw, errPik := runCmd("pikaur", "-Qua")
-	if errPik != nil {
-		*err = errPik
-		wg.Done()
-		return
-	}
-	re := regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<oldver>\S+)\s+->\s+(?P<newver>\S+)\s*$`)
-	for _, m := range re.FindAllStringSubmatch(raw, -1) {
-		var u api.Update
-		u.Pkg = m[1]
-		u.OldVer = m[2]
-		u.NewVer = m[3]
-		u.Repo = "aur"
-		*updates = append(*updates, u)
-	}
-	wg.Done()
+// helper contains data necessary to run an AUR helper
+type helper struct {
+	name string
+	args string
+	// Optional regex pattern for updates, defaults to pacman regex if nil
+	re *regexp.Regexp
 }
 
 type updRes struct {
@@ -88,29 +49,96 @@ type updRes struct {
 	err error
 }
 
-// UpdateArch uses checkupdates and (if available) pikaur to get available updates
-func UpdateArch() (updates []api.Update, err error) {
-	var wg sync.WaitGroup
-	var pacUpd updRes
-	var aurUpd updRes
-	// Run in parallel
-	wg.Add(1)
-	go procPacman(&pacUpd.upd, &wg, &pacUpd.err)
-	wg.Add(1)
-	go procPikaur(&aurUpd.upd, &wg, &aurUpd.err)
-	wg.Wait()
-	// Both failed
-	if pacUpd.err != nil && aurUpd.err != nil {
-		err = fmt.Errorf("Pacman: %s\nPikaur: %s", pacUpd.err, aurUpd.err)
+var rePacman = regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<oldver>\S+)\s+->\s+(?P<newver>\S+)\s*$`)
+var supportedHelpers = []helper{
+	{
+		name: "yay",
+		args: "-Qua",
+		re:   rePacman,
+	},
+	{
+		name: "pikaur",
+		args: "-Qua",
+		re:   rePacman,
+	},
+}
+
+func procPacman(ch chan<- updRes) {
+	res := updRes{}
+	defer func() {
+		ch <- res
+	}()
+	raw, err := runCmd("checkupdates")
+	if err != nil {
+		// Exit code 2 is OK, no updates
+		if exitError, ok := err.(*exec.ExitError); ok {
+			if exitError.ExitCode() != 2 {
+				res.err = err
+			}
+		}
 		return
 	}
-	// Concatenate and check for errors
-	for n, u := range map[string]updRes{"pacman": pacUpd, "aur": aurUpd} {
-		if u.err != nil {
-			err = fmt.Errorf("%s: %s", n, u.err)
-			continue
+
+	for _, m := range rePacman.FindAllStringSubmatch(raw, -1) {
+		var u api.Update
+		u.Pkg = m[1]
+		u.OldVer = m[2]
+		u.NewVer = m[3]
+		u.Repo = "pacman"
+		res.upd = append(res.upd, u)
+	}
+}
+
+func procAUR(ch chan<- updRes) {
+	res := updRes{}
+	defer func() {
+		ch <- res
+	}()
+	if aur.name == "" {
+		log.Debug("no AUR helper, skipping")
+		return
+	}
+	raw, err := runCmd(aur.name, aur.args)
+	if err != nil {
+		res.err = err
+		return
+	}
+	if aur.re == nil {
+		res.err = fmt.Errorf("regex for %s is nil", aur.name)
+	}
+	for _, m := range aur.re.FindAllStringSubmatch(raw, -1) {
+		var u api.Update
+		u.Pkg = m[1]
+		u.OldVer = m[2]
+		u.NewVer = m[3]
+		u.Repo = "aur"
+		res.upd = append(res.upd, u)
+	}
+}
+
+// UpdateArch uses checkupdates and (if available) a supported AUR helper to get available updates
+func UpdateArch() (updates []api.Update, err error) {
+	chPac := make(chan updRes)
+	chAUR := make(chan updRes)
+	// Run in parallel
+	go procPacman(chPac)
+	go procAUR(chAUR)
+	// Wait for results
+	for i := 0; i < 2; i++ {
+		select {
+		case u := <-chPac:
+			if u.err != nil {
+				err = fmt.Errorf("pacman failed: %v", u.err)
+			} else {
+				updates = append(updates, u.upd...)
+			}
+		case u := <-chAUR:
+			if u.err != nil {
+				err = fmt.Errorf("AUR failed: %v", u.err)
+			} else {
+				updates = append(updates, u.upd...)
+			}
 		}
-		updates = append(updates, u.upd...)
 	}
 	return
 }
