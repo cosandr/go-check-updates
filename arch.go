@@ -57,6 +57,11 @@ var supportedHelpers = []helper{
 		re:   rePacman,
 	},
 	{
+		name: "paru",
+		args: "-Qua",
+		re:   rePacman,
+	},
+	{
 		name: "pikaur",
 		args: "-Qua",
 		re:   rePacman,
@@ -100,11 +105,22 @@ func procAUR(ch chan<- updRes) {
 	}
 	raw, err := runCmd(aur.name, aur.args)
 	if err != nil {
-		res.err = err
-		return
+		if aur.name == "paru" {
+			// Exit code 1 is OK, no updates
+			if exitError, ok := err.(*exec.ExitError); ok {
+				if exitError.ExitCode() != 1 {
+					res.err = err
+					return
+				}
+			}
+		} else {
+			res.err = err
+			return
+		}
 	}
 	if aur.re == nil {
 		res.err = fmt.Errorf("regex for %s is nil", aur.name)
+		return
 	}
 	for _, m := range aur.re.FindAllStringSubmatch(raw, -1) {
 		var u api.Update
