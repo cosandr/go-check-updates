@@ -27,9 +27,13 @@ $ pikaur -Qua 2>/dev/null
 */
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
+	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
@@ -49,7 +53,17 @@ type updRes struct {
 	err error
 }
 
+const pacmanTimeFmt = "2006-01-02T15:04:05-0700" // old format "2006-01-02 15:04"
+
 var rePacman = regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<oldver>\S+)\s+->\s+(?P<newver>\S+)\s*$`)
+
+// Group 1: timestamp
+// Group 2: action (installed, upgraded, removed)
+// Group 3: package
+// Group 4: if installed or removed, version
+//			if upgraded, <oldVersion> -> <newVersion> (same as pacman -Qu)
+var rePacmanLog = regexp.MustCompile(`^\[(\S+)\]\s\[ALPM\]\s(\w+)\s(\S+)\s\((.*)\)$`)
+
 var supportedHelpers = []helper{
 	{
 		name: "yay",
@@ -157,4 +171,61 @@ func UpdateArch() (updates []api.Update, err error) {
 		}
 	}
 	return
+}
+
+// checkPacmanLogs read pacman log file and update internal cache accordingly
+func checkPacmanLogs(fp string) error {
+	file, err := os.Open(fp)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	lastChecked, err := time.Parse(time.RFC3339, cache.f.Checked)
+	if err != nil {
+		return fmt.Errorf("cannot parse cached time '%s': %v", cache.f.Checked, err)
+	}
+	beforeLen := len(cache.f.Updates)
+	for scanner.Scan() {
+		m := rePacmanLog.FindStringSubmatch(scanner.Text())
+		if len(m) != 5 {
+			continue
+		}
+		timestamp, action, name, ver := m[1], m[2], m[3], m[4]
+		t, err := time.Parse(pacmanTimeFmt, timestamp)
+		if err != nil {
+			log.Debugf("cannot parse '%s': %v", timestamp, err)
+			continue
+		}
+		if t.Before(lastChecked) {
+			log.Debugf("skip '%s', timestamp too early %v", name, t)
+			continue
+		}
+		switch action {
+		case "installed":
+			log.Debugf("skip '%s', action installed", name)
+			continue
+		case "upgraded":
+			tmp := strings.Split(ver, " -> ")
+			if len(tmp) != 2 {
+				log.Warnf("expected 'old -> new', got '%s'", ver)
+				continue
+			}
+			if changed := cache.f.RemoveIfNew(name, tmp[1]); changed {
+				log.Debugf("removed upgraded package %s %s", name, tmp[1])
+			} else {
+				log.Debugf("skip upgraded package %s %s", name, tmp[1])
+			}
+		case "removed":
+			if changed := cache.f.RemoveIfNew(name, ver); changed {
+				log.Debugf("removed uninstalled package %s %s", name, ver)
+			} else {
+				log.Debugf("skip uninstalled package %s %s", name, ver)
+			}
+		}
+	}
+	if len(cache.f.Updates) != beforeLen {
+		log.Infof("%s: removed %d pending updates", fp, beforeLen-len(cache.f.Updates))
+	}
+	return scanner.Err()
 }

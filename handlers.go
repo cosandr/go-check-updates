@@ -20,13 +20,21 @@ import (
 // - updates: return list of updates
 // - refresh: refresh updates
 // Optional params:
+// - log_file: used with refresh, read package manager log
 // - every: used with refresh, time duration to wait between updates
 // - immediate: used with refresh, return response without waiting for update to finish
 func HandleAPI(w http.ResponseWriter, r *http.Request) {
+	var start time.Time
 	log.Debugf("GET - %s - %s", r.RemoteAddr, r.RequestURI)
+	if log.GetLevel() == log.DebugLevel {
+		start = time.Now()
+	}
 	w.Header().Set("Content-Type", "application/json")
 	var resp api.Response
 	defer func() {
+		if log.GetLevel() == log.DebugLevel {
+			log.Debugf("request done in %dms", time.Since(start).Milliseconds())
+		}
 		log.Debug("HandleAPI: Marshalling response")
 		d, _ := json.Marshal(&resp)
 		log.Debugf("HandleAPI: Sending response:\n%s", string(d))
@@ -43,40 +51,55 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if refresh {
-		var willRefresh bool
-		_, immediate := params["immediate"]
-		// Sets willRefresh to true if an update is needed
-		if val := params.Get("every"); val != "" {
-			every, err := time.ParseDuration(val)
-			if err != nil {
-				resp.Error = fmt.Sprintf("Cannot parse time duration: %v", err)
+		if _, useLog := params["log_file"]; useLog {
+			log.Debug("HandleAPI: Update from package manager log file")
+			if cache.f.Checked == "" {
+				resp.Error = fmt.Sprintf("Updates were never checked, cannot update from logs.")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			log.Debug("HandleAPI: Conditional cache file update requested")
-			willRefresh = cache.NeedsUpdate(every)
+			if err := cache.RefreshFromLogs(); err != nil {
+				log.Errorf("HandleAPI: %v", err)
+				resp.Error = fmt.Sprintf("Cannot update from package manager logs: %v", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		} else {
-			log.Debug("HandleAPI: Unconditional cache file update requested")
-			willRefresh = true
-		}
-		if willRefresh {
-			log.Debug("HandleAPI: Cache file refreshing")
-			if immediate {
-				go cache.Update()
-				log.Debug("HandleAPI: Cache file update queued")
-				tmp := true
-				resp.Queued = &tmp
-				w.WriteHeader(http.StatusAccepted)
-			} else {
-				log.Debug("HandleAPI: Cache file updating")
-				err := cache.Update()
+			var willRefresh bool
+			_, immediate := params["immediate"]
+			// Sets willRefresh to true if an update is needed
+			if val := params.Get("every"); val != "" {
+				every, err := time.ParseDuration(val)
 				if err != nil {
-					log.Errorf("Update failed: %v", err)
-					resp.Error = fmt.Sprintf("Cannot update cache file: %v", err)
-					w.WriteHeader(http.StatusInternalServerError)
+					resp.Error = fmt.Sprintf("Cannot parse time duration: %v", err)
+					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
-				log.Debug("HandleAPI: Cache file updated")
+				log.Debug("HandleAPI: Conditional cache file update requested")
+				willRefresh = cache.NeedsUpdate(every)
+			} else {
+				log.Debug("HandleAPI: Unconditional cache file update requested")
+				willRefresh = true
+			}
+			if willRefresh {
+				log.Debug("HandleAPI: Cache file refreshing")
+				if immediate {
+					go cache.Update()
+					log.Debug("HandleAPI: Cache file update queued")
+					tmp := true
+					resp.Queued = &tmp
+					w.WriteHeader(http.StatusAccepted)
+				} else {
+					log.Debug("HandleAPI: Cache file updating")
+					err := cache.Update()
+					if err != nil {
+						log.Errorf("Update failed: %v", err)
+						resp.Error = fmt.Sprintf("Cannot update cache file: %v", err)
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+					log.Debug("HandleAPI: Cache file updated")
+				}
 			}
 		}
 	}

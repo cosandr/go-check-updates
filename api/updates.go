@@ -19,6 +19,19 @@ func (f File) Copy() File {
 	return cp
 }
 
+// RemoveIfNew removes update from internal list if name and new version match
+func (f *File) RemoveIfNew(name string, newVer string) bool {
+	updates := make([]Update, 0)
+	for _, u := range f.Updates {
+		if u.Pkg != name || u.NewVer != newVer {
+			updates = append(updates, u)
+		}
+	}
+	changed := len(f.Updates) != len(updates)
+	f.Updates = updates
+	return changed
+}
+
 // Update is the struct for pending updates
 type Update struct {
 	Pkg    string `json:"pkg"`

@@ -44,6 +44,8 @@ func main() {
 		argLogFile         string
 		argAurHelper       string
 		cacheFp            string
+		logFp              string
+		logFunc            func(string) error
 		defaultInterval, _ = time.ParseDuration(defaultWait)
 		defaultCache, _    = getCachePath()
 		err                error
@@ -138,6 +140,8 @@ func main() {
 	case "fedora":
 		updateFunc = UpdateDnf
 	case "arch":
+		logFp = "/var/log/pacman.log"
+		logFunc = checkPacmanLogs
 		updateFunc = UpdateArch
 		for _, h := range supportedHelpers {
 			if !checkCmd(h.name) {
@@ -176,9 +180,11 @@ func main() {
 		log.Infof("Using auto path for cache file: %s", cacheFp)
 	}
 	cache = InternalCache{
-		f:  api.File{},
-		fp: cacheFp,
-		ws: &WsFeed{listeners: make(map[uint16]chan struct{})},
+		f:       api.File{},
+		fp:      cacheFp,
+		logFp:   logFp,
+		logFunc: logFunc,
+		ws:      &WsFeed{listeners: make(map[uint16]chan struct{})},
 	}
 	if argSystemd {
 		listeners, err := activation.Listeners()
@@ -217,9 +223,15 @@ func main() {
 		}
 		http.HandleFunc("/api", HandleAPI)
 		http.HandleFunc("/ws", HandleWS)
+		if cache.NeedsUpdate(argCacheInterval) {
+			if err = cache.Update(); err != nil {
+				log.Errorf("Refresh failed: %v", err)
+			}
+			log.Infof("Found %d updates", len(cache.f.Updates))
+		}
 		log.Infof("Listening on %s", listener.Addr().String())
 		err = http.Serve(listener, nil)
-		if err != nil {
+		if err != http.ErrServerClosed {
 			log.Errorf("HTTP serve error: %v", err)
 			os.Exit(2)
 		}
@@ -231,10 +243,8 @@ func main() {
 		log.Info("No update required")
 		return
 	}
-
-	err = cache.Update()
-	if err != nil {
-		fmt.Printf("Refresh failed: %v", err)
+	if err = cache.Update(); err != nil {
+		log.Errorf("Refresh failed: %v", err)
 		return
 	}
 	// Print to console if we aren't using cache
@@ -251,5 +261,18 @@ func main() {
 			fmt.Printf("%s\n", tmp)
 		}
 	}
+}
 
+func startupRefresh(interval time.Duration) error {
+	if !cache.NeedsUpdate(interval) {
+		log.Info("No update required")
+		return nil
+	}
+
+	err := cache.Update()
+	if err != nil {
+		log.Errorf("Startup refresh failed: %v", err)
+		return err
+	}
+	return nil
 }

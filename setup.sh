@@ -190,7 +190,7 @@ ExecStart=$PKG_PATH -systemd
 EOF
         ;;
     pacman-hook)
-        query="?refresh&immediate&every=5m"
+        query="?refresh&log_file"
         # We have a unix socket
         if [[ $LISTEN_ADDRESS == /* ]]; then
             CURL_ADDRESS="--unix-socket $LISTEN_ADDRESS"

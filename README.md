@@ -21,16 +21,23 @@ This can then be read by other scripts, for example my own [go-motd](https://git
 
 ## Supported package managers
 
-Manager | Pkg | Old Ver | New Ver | Repo
---- | --- | --- | --- | ----
-pacman | Y | Y | Y | N*
-pikaur | Y | Y | Y | N*
-yay | Y | Y | Y | N*
-dnf/yum | Y | N | Y | Y
+Manager | Pkg | Old Ver | New Ver | Repo | Logs
+--- | --- | --- | --- | --- | ---
+pacman | Y | Y | Y | N* | Y
+dnf/yum | Y | N | Y | Y | N
 
-\* Repo is simply set to "aur" or "pacman"
+\* Repo is set to "pacman"
 
-NOTE: dnf/yum only work with Fedora, [redhat.go](./redhat.go) is supposed to work with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is in `/etc/os-release`. If you know, feel free to add it to the switch case in [internal.go](./internal.go)
+NOTE: dnf/yum only work with Fedora, [redhat.go](./redhat.go) is supposed to work
+with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is
+in `/etc/os-release`. If you know, feel free to add it to the switch case in [internal.go](./internal.go)
+
+## Supported AUR helpers
+* pikaur
+* yay
+* paru
+
+Repo to "aur"
 
 ## Installation
 
@@ -56,6 +63,10 @@ See API section for more details.
 ```sh
 # Update now, returns after update has completed
 $ curl 'http://localhost:8100/api?refresh'
+{}
+# Refresh internal cache by reading package manager log file
+# Best used in post-install hooks as it is quite fast
+$ curl 'http://localhost:8100/api?refresh&log_file'
 {}
 # Update now, return file location immediately
 $ curl 'http://localhost:8100/api?refresh&filepath&immediate'

@@ -8,8 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cosandr/go-check-updates/api"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/cosandr/go-check-updates/api"
 )
 
 // Subscription holds data for a listener
@@ -72,9 +73,11 @@ func (f *WsFeed) Subscribe() *Subscription {
 // InternalCache stores information about the updates cache
 // Contains a WsFeed for threadsafe operations
 type InternalCache struct {
-	f  api.File
-	fp string
-	ws *WsFeed
+	f       api.File
+	fp      string
+	logFp   string
+	logFunc func(string) error
+	ws      *WsFeed
 }
 
 // Update the internal cache and optional file
@@ -98,7 +101,20 @@ func (ic *InternalCache) Update() error {
 		err = ic.Write()
 	}
 	ic.ws.Broadcast()
-	log.Debug("WS broadcast")
+	log.Debug("Update: WS broadcast")
+	return err
+}
+
+// RefreshFromLogs updates cache by reading package manager logs
+func (ic *InternalCache) RefreshFromLogs() error {
+	if ic.logFp == "" {
+		return fmt.Errorf("no package manager log file path")
+	}
+	if err := ic.logFunc(ic.logFp); err != nil {
+		return err
+	}
+	ic.ws.Broadcast()
+	log.Debug("RefreshFromLogs: WS broadcast")
 	return nil
 }
 
