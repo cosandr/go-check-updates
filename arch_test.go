@@ -84,11 +84,11 @@ func TestPacmanLogs(t *testing.T) {
 	if len(cache.f.Updates) != 1 {
 		t.Errorf("Expected 1 update, got %d: %v", len(cache.f.Updates), cache.f.Updates)
 	}
-	// Uninstall a package pending upgrades
+	// Uninstall a package pending upgrades, note old version
 	file = `
 [2020-05-29T23:47:18+0200] [ALPM] upgraded shellcheck (0.7.1-32 -> 0.7.1-33)
 [2020-05-29T23:47:18+0200] [ALPM] upgraded vte-common (0.60.2-2 -> 0.60.3-1)
-[2020-05-29T23:47:18+0200] [ALPM] removed vte3 (0.60.3-1)
+[2020-05-29T23:47:18+0200] [ALPM] removed vte3 (0.60.2-2)
 `
 	cache.f.Updates = allUpdates
 	if err := runPacmanLogsTest(file); err != nil {

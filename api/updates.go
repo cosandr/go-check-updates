@@ -19,11 +19,12 @@ func (f File) Copy() File {
 	return cp
 }
 
-// RemoveIfNew removes update from internal list if name and new version match
-func (f *File) RemoveIfNew(name string, newVer string) bool {
+// Remove removes update from internal list if name matches
+// If newVer isn't an empty string, only remove if that matches as well
+func (f *File) Remove(name string, newVer string) bool {
 	updates := make([]Update, 0)
 	for _, u := range f.Updates {
-		if u.Pkg != name || u.NewVer != newVer {
+		if u.Pkg != name || (newVer != "" && u.NewVer != newVer) {
 			updates = append(updates, u)
 		}
 	}

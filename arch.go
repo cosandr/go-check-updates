@@ -211,13 +211,13 @@ func checkPacmanLogs(fp string) error {
 				log.Warnf("expected 'old -> new', got '%s'", ver)
 				continue
 			}
-			if changed := cache.f.RemoveIfNew(name, tmp[1]); changed {
+			if changed := cache.f.Remove(name, tmp[1]); changed {
 				log.Debugf("removed upgraded package %s %s", name, tmp[1])
 			} else {
 				log.Debugf("skip upgraded package %s %s", name, tmp[1])
 			}
 		case "removed":
-			if changed := cache.f.RemoveIfNew(name, ver); changed {
+			if changed := cache.f.Remove(name, ""); changed {
 				log.Debugf("removed uninstalled package %s %s", name, ver)
 			} else {
 				log.Debugf("skip uninstalled package %s %s", name, ver)
