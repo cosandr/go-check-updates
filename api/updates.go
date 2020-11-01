@@ -1,6 +1,9 @@
 package api
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // File is the struct for the json file
 type File struct {
@@ -47,6 +50,21 @@ func (f *File) RemoveContains(check string, newVer bool) bool {
 	changed := len(f.Updates) != len(updates)
 	f.Updates = updates
 	return changed
+}
+
+func (f *File) String() string {
+	ret := fmt.Sprintf("Checked: %s", f.Checked)
+	for _, u := range f.Updates {
+		ret += "\n" + u.Pkg
+		if u.OldVer != "" {
+			ret += fmt.Sprintf(" %s", u.OldVer)
+		}
+		ret += fmt.Sprintf(" -> %s", u.NewVer)
+		if u.Repo != "" {
+			ret += fmt.Sprintf(" [%s]", u.Repo)
+		}
+	}
+	return ret
 }
 
 // Update is the struct for pending updates
