@@ -1,3 +1,8 @@
+# github.com/alexflint/go-arg v1.3.0
+## explicit
+github.com/alexflint/go-arg
+# github.com/alexflint/go-scalar v1.0.0
+github.com/alexflint/go-scalar
 # github.com/coreos/go-systemd/v22 v22.1.0
 ## explicit
 github.com/coreos/go-systemd/v22/activation
@@ -8,7 +13,7 @@ github.com/gorilla/websocket
 ## explicit
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/writer
-# golang.org/x/sys v0.0.0-20201005172224-997123666555
+# golang.org/x/sys v0.0.0-20201101102859-da207088b7d1
 ## explicit
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix

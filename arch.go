@@ -7,23 +7,10 @@ libjpeg-turbo 2.0.3-1 -> 2.0.4-1
 linux 5.4.6.arch3-1 -> 5.4.7.arch1-1
 linux-headers 5.4.6.arch3-1 -> 5.4.7.arch1-1
 shellcheck 0.7.0-82 -> 0.7.0-83
-##########
+
 $ pikaur -Qua 2>/dev/null
  corefreq-git                          1.70-1               -> 1.71-1
  pikaur                                1.5.7-1              -> 1.5.8-1
-##########
-/var/log/pacman.log
-[2020-05-29T23:47:13+0200] [ALPM] upgraded linux-firmware (20200421.78c0348-1 -> 20200519.8ba6fa6-1)
-[2020-05-29T23:47:18+0200] [ALPM] upgraded linux-headers (5.6.14.arch1-1 -> 5.6.15.arch1-1)
-[2020-05-29T23:47:18+0200] [ALPM] upgraded networkmanager (1.24.0-1 -> 1.24.2-1)
-[2020-05-29T23:47:18+0200] [ALPM] upgraded python-setuptools (1:47.1.0-1 -> 1:47.1.1-1)
-[2020-05-29T23:47:18+0200] [ALPM] upgraded sbsigntools (0.9.3-1 -> 0.9.3-2)
-[2020-05-29T23:47:18+0200] [ALPM] upgraded shellcheck (0.7.1-32 -> 0.7.1-33)
-[2020-05-29T23:47:18+0200] [ALPM] upgraded vte-common (0.60.2-2 -> 0.60.3-1)
-[2020-05-29T23:47:18+0200] [ALPM] upgraded vte3 (0.60.2-2 -> 0.60.3-1)
-[2020-05-29T23:47:11+0200] [ALPM] installed haskell-these (1.1-1)
-[2020-05-12T10:19:08+0200] [ALPM] removed ovmf (1:202002-1)
-[2020-05-12T10:19:08+0200] [ALPM] removed libwbclient (4.11.3-3)
 */
 
 import (
@@ -42,10 +29,9 @@ import (
 
 // helper contains data necessary to run an AUR helper
 type helper struct {
-	name string
-	args string
-	// Optional regex pattern for updates, defaults to pacman regex if nil
-	re *regexp.Regexp
+	name string         // executable name
+	args string         // arguments to use when checking for AUR-only updates
+	re   *regexp.Regexp // regex pattern for updates
 }
 
 type updRes struct {
@@ -114,7 +100,7 @@ func procAUR(ch chan<- updRes) {
 		ch <- res
 	}()
 	if aur.name == "" {
-		log.Debug("no AUR helper, skipping")
+		log.Debug("procAUR: no AUR helper, skipping")
 		return
 	}
 	raw, err := runCmd(aur.name, aur.args)
@@ -194,38 +180,38 @@ func checkPacmanLogs(fp string) error {
 		timestamp, action, name, ver := m[1], m[2], m[3], m[4]
 		t, err := time.Parse(pacmanTimeFmt, timestamp)
 		if err != nil {
-			log.Debugf("cannot parse '%s': %v", timestamp, err)
+			log.Debugf("checkPacmanLogs: cannot parse '%s': %v", timestamp, err)
 			continue
 		}
 		if t.Before(lastChecked) {
-			log.Debugf("skip '%s', timestamp too early %v", name, t)
+			log.Debugf("checkPacmanLogs: skip '%s', timestamp too early %v", name, t)
 			continue
 		}
 		switch action {
 		case "installed":
-			log.Debugf("skip '%s', action installed", name)
+			log.Debugf("checkPacmanLogs: skip '%s', action installed", name)
 			continue
 		case "upgraded":
 			tmp := strings.Split(ver, " -> ")
 			if len(tmp) != 2 {
-				log.Warnf("expected 'old -> new', got '%s'", ver)
+				log.Warnf("checkPacmanLogs: expected 'old -> new', got '%s'", ver)
 				continue
 			}
 			if changed := cache.f.Remove(name, tmp[1]); changed {
-				log.Debugf("removed upgraded package %s %s", name, tmp[1])
+				log.Debugf("checkPacmanLogs: removed upgraded package %s %s", name, tmp[1])
 			} else {
-				log.Debugf("skip upgraded package %s %s", name, tmp[1])
+				log.Debugf("checkPacmanLogs: skip upgraded package %s %s", name, tmp[1])
 			}
 		case "removed":
 			if changed := cache.f.Remove(name, ""); changed {
-				log.Debugf("removed uninstalled package %s %s", name, ver)
+				log.Debugf("checkPacmanLogs: removed uninstalled package %s %s", name, ver)
 			} else {
-				log.Debugf("skip uninstalled package %s %s", name, ver)
+				log.Debugf("checkPacmanLogs: skip uninstalled package %s %s", name, ver)
 			}
 		}
 	}
 	if len(cache.f.Updates) != beforeLen {
-		log.Infof("%s: removed %d pending updates", fp, beforeLen-len(cache.f.Updates))
+		log.Infof("checkPacmanLogs: %s: removed %d pending updates", fp, beforeLen-len(cache.f.Updates))
 	}
 	return scanner.Err()
 }

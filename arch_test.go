@@ -11,11 +11,8 @@ import (
 
 func TestPacmanLogs(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
-	cache = InternalCache{
-		f: api.File{
-			Checked: "2020-05-29T23:00:00+02:00",
-		},
-	}
+	cache = NewInternalCache()
+	cache.f.Checked = "2020-05-29T23:00:00+02:00"
 	/*
 		Check "new" log format (after 2019-10-24)
 		Before that, the format was as below

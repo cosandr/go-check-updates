@@ -11,11 +11,8 @@ import (
 
 func TestDnfLogs(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
-	cache = InternalCache{
-		f: api.File{
-			Checked: "2020-07-12T11:00:00+02:00",
-		},
-	}
+	cache = NewInternalCache()
+	cache.f.Checked = "2020-07-12T11:00:00+02:00"
 	// Check "old" log format (date unknown)
 	file := `
 2020-07-12T11:13:51Z SUBDEBUG Upgrade: selinux-policy-devel-3.14.5-42.fc32.noarch

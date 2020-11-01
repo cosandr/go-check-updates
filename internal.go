@@ -14,6 +14,14 @@ import (
 	"github.com/cosandr/go-check-updates/api"
 )
 
+//  NewInternalCache returns a pointer to a new InternalCache struct
+func NewInternalCache() *InternalCache {
+	return &InternalCache{
+		f:  api.File{},
+		ws: &WsFeed{listeners: make(map[uint16]chan struct{})},
+	}
+}
+
 // Subscription holds data for a listener
 type Subscription struct {
 	feed *WsFeed
@@ -74,17 +82,18 @@ func (f *WsFeed) Subscribe() *Subscription {
 // InternalCache stores information about the updates cache
 // Contains a WsFeed for threadsafe operations
 type InternalCache struct {
-	f       api.File
-	fp      string
-	logFp   string
-	logFunc func(string) error
-	ws      *WsFeed
+	f          api.File
+	fp         string
+	logFp      string
+	logFunc    func(string) error
+	updateFunc func() (updates []api.Update, err error)
+	ws         *WsFeed
 }
 
 // Update the internal cache and optional file
 func (ic *InternalCache) Update() error {
-	log.Info("Refreshing")
-	updates, err := updateFunc()
+	log.Info("refreshing")
+	updates, err := ic.updateFunc()
 	if err != nil {
 		// Something failed and we got nothing
 		if len(updates) == 0 {

@@ -10,9 +10,9 @@ otherwise it simply does nothing when run before 12 hours has passed since the p
 The default cache file may change, the first choice is `/tmp/go-check-updates.json`.
 If the file exists but it isn't writable, it will fallback to `$HOME/.cache/go-check-updates/cache.json` instead.
 
-It can be disabled completely with `-no-cache`.
+It can be disabled completely with `--no-cache`.
 
-The refresh interval can be changed with the `-cache.interval` option, disable with `no-refresh`.
+The refresh interval can be changed with the `--cache.interval` option, disable with `--no-refresh`.
 Disabled without daemon mode will refresh every time it is run, with daemon mode there is no auto-refresh.
 
 See `go-check-updates -h` for up to date information on the parameters.
@@ -115,10 +115,10 @@ Note this is what the API returns in the `data` key, the websocket returns exact
 
 ## API
 
-Run with `-daemon` argument to start a web server,
-listen address and port can be adjusted with `-web.listen-address`.
+Run with `--daemon` argument to start a web server,
+listen address and port can be adjusted with `--web.listen-address`.
 
-Alternatively, systemd socket activation can be used with the `-systemd` argument, socket and service units can be
+Alternatively, systemd socket activation can be used with the `--systemd` argument, socket and service units can be
 created with the `setup.sh` script.
 
 `/api` endpoint

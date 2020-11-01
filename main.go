@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -9,12 +8,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/alexflint/go-arg"
 	"github.com/coreos/go-systemd/v22/activation"
-	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/writer"
-
-	"github.com/cosandr/go-check-updates/api"
 )
 
 const (
@@ -22,88 +19,38 @@ const (
 	defaultWait string = "12h"
 )
 
-var (
-	updateFunc func() (updates []api.Update, err error)
-	aur        helper
-	upgrader   = websocket.Upgrader{}
-	cache      InternalCache
-)
+var aur = helper{}
+var cache = NewInternalCache()
+var args struct {
+	AurHelper     string        `arg:"--aur" help:"Override AUR helper (Arch Linux)"`
+	CacheFile     string        `arg:"--cache.file,env:CACHE_FILE" help:"Path to update cache file"`
+	CacheInterval time.Duration `arg:"--cache.interval,env:CACHE_INTERVAL" help:"Time interval between cache updates"`
+	Daemon        bool          `arg:"-d,--daemon" help:"Run as a daemon"`
+	Debug         bool          `arg:"--debug,env:DEBUG" help:"Set console log output to DEBUG"`
+	ListenAddress string        `arg:"--web.listen-address,env:LISTEN_ADDRESS" help:"Web server listen address" default:":8100"`
+	LogFile       string        `arg:"--log.file,env:LOG_FILE" help:"Path to log file"`
+	LogLevel      string        `arg:"--log.level,env:LOG_LEVEL" default:"INFO" help:"Set log level"`
+	NoCache       bool          `arg:"--no-cache,env:NO_CACHE" help:"Don't use cache file"`
+	NoLogFile     bool          `arg:"--no-log,env:NO_LOG_FILE" help:"Don't log to file"`
+	NoRefresh     bool          `arg:"--no-refresh,env:NO_REFRESH" help:"Don't auto-refresh"`
+	Quiet         bool          `arg:"-q,--quiet" help:"Don't log to console"`
+	Systemd       bool          `arg:"--systemd" help:"Run HTTP server using systemd socket activation"`
+	Watch         bool          `arg:"-w,--watch.enable,env:WATCH_ENABLE" help:"Watch for package manager log file updates"`
+	WatchInterval time.Duration `arg:"--watch.interval,env:WATCH_INTERVAL" help:"Time interval between package manager log file checks" default:"10s"`
+}
 
-func main() {
-	var (
-		argDaemon          bool
-		argDebug           bool
-		argNoCache         bool
-		argNoLog           bool
-		argNoRefresh       bool
-		argQuiet           bool
-		argSystemd         bool
-		argWatch           bool
-		argCacheInterval   time.Duration
-		argWatchInterval   time.Duration
-		argCacheFile       string
-		argListenAddress   string
-		argLogFile         string
-		argAurHelper       string
-		cacheFp            string
-		logFp              string
-		logFunc            func(string) error
-		defaultInterval, _ = time.ParseDuration(defaultWait)
-		defaultCache, _    = getCachePath()
-		err                error
-		listener           net.Listener
-	)
-
-	flag.BoolVar(&argQuiet, "q", false, "Don't log to console")
-	flag.BoolVar(&argDaemon, "daemon", false, "Run HTTP server as a daemon")
-	flag.BoolVar(&argSystemd, "systemd", false, "Run HTTP server using systemd socket activation")
-	flag.BoolVar(&argDebug, "debug", false, "Set console log output to DEBUG")
-	flag.BoolVar(&argNoCache, "no-cache", false, "Don't use cache file, env NO_CACHE")
-	flag.BoolVar(&argNoLog, "no-log", false, "Don't log to file, env NO_LOG")
-	flag.BoolVar(&argNoRefresh, "no-refresh", false, "Don't auto-refresh, env NO_REFRESH")
-	flag.StringVar(&argAurHelper, "aur", "", "Override AUR helper (Arch Linux)")
-	flag.StringVar(&argCacheFile, "cache.file", defaultCache, "Path to update cache file, env CACHE_FILE")
-	flag.DurationVar(&argCacheInterval, "cache.interval", defaultInterval, "Time interval between cache updates, env CACHE_INTERVAL")
-	flag.StringVar(&argLogFile, "log.file", "", "Path to log file, env LOG_FILE")
-	flag.StringVar(&argListenAddress, "web.listen-address", ":8100", "Web server listen address, env LISTEN_ADDRESS")
-	flag.BoolVar(&argWatch, "watch.enable", false, "Watch for package manager log file updates, env WATCH_ENABLE")
-	flag.DurationVar(&argWatchInterval, "watch.interval", 10*time.Second, "Time interval between package manager log file checks, env WATCH_INTERVAL")
-	flag.Parse()
-	// Get from environment
-	if v := os.Getenv("NO_CACHE"); v == "1" {
-		argNoCache = true
-	} else if v := os.Getenv("CACHE_FILE"); v != "" {
-		argCacheFile = v
-	}
-	if v := os.Getenv("NO_REFRESH"); v == "1" {
-		argNoLog = true
-	} else if v := os.Getenv("CACHE_INTERVAL"); v != "" {
-		argCacheInterval, err = time.ParseDuration(v)
-		if err != nil {
-			log.Fatal(err)
+func getLogLevels(level log.Level) []log.Level {
+	ret := make([]log.Level, 0)
+	for _, lvl := range log.AllLevels {
+		if level >= lvl {
+			ret = append(ret, lvl)
 		}
 	}
-	if v := os.Getenv("LISTEN_ADDRESS"); v != "" {
-		argListenAddress = v
-	}
-	if v := os.Getenv("NO_LOG"); v == "1" {
-		argNoLog = true
-	} else if v := os.Getenv("LOG_FILE"); v != "" {
-		argLogFile = v
-	}
-	if v := os.Getenv("WATCH_ENABLE"); v == "1" {
-		argWatch = true
-	}
-	if v := os.Getenv("WATCH_INTERVAL"); v != "" {
-		argWatchInterval, err = time.ParseDuration(v)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-	//
-	// Logging setup
-	//
-	if argSystemd || argDaemon {
+	return ret
+}
+
+func setupLogging() {
+	if args.Systemd || args.Daemon {
 		// Disable timestamps when running in background mode
 		// They are not needed as these modes are most likely used with systemd
 		// which adds its own timestamps
@@ -112,25 +59,26 @@ func main() {
 		log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	}
 	log.SetOutput(ioutil.Discard)
-	levels := []log.Level{
-		log.PanicLevel,
-		log.FatalLevel,
-		log.ErrorLevel,
-		log.WarnLevel,
-		log.InfoLevel,
+	var logLevel log.Level
+	var err error
+	if args.Debug {
+		logLevel = log.DebugLevel
+	} else {
+		logLevel, err = log.ParseLevel(args.LogLevel)
+		if err != nil {
+			logLevel = log.InfoLevel
+			log.Warnf("Unknown log level %s, defaulting to INFO", args.LogLevel)
+		}
 	}
-	if argDebug {
-		log.SetLevel(log.DebugLevel)
-		levels = append(levels, log.DebugLevel)
-	}
-	if !argQuiet {
+	levels := getLogLevels(logLevel)
+	if !args.Quiet {
 		log.AddHook(&writer.Hook{
 			Writer:    os.Stderr,
 			LogLevels: levels,
 		})
 	}
-	if !argNoLog && argLogFile != "" {
-		file, err := os.OpenFile(argLogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if !args.NoLogFile && args.LogFile != "" {
+		file, err := os.OpenFile(args.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -140,30 +88,29 @@ func main() {
 			LogLevels: levels,
 		})
 	}
-	//
-	// Logging setup
-	//
+}
 
+func setupDistro() {
 	// Setup distro specific stuff
 	distro, err := getDistro()
 	if err != nil {
-		log.Panicln(err)
+		log.Fatalln(err)
 	}
 	switch distro {
 	case "fedora":
-		updateFunc = UpdateDnf
-		logFp = "/var/log/dnf.rpm.log"
-		logFunc = checkDnfLogs
+		cache.updateFunc = UpdateDnf
+		cache.logFp = "/var/log/dnf.rpm.log"
+		cache.logFunc = checkDnfLogs
 	case "arch":
-		logFp = "/var/log/pacman.log"
-		logFunc = checkPacmanLogs
-		updateFunc = UpdateArch
+		cache.logFp = "/var/log/pacman.log"
+		cache.logFunc = checkPacmanLogs
+		cache.updateFunc = UpdateArch
 		for _, h := range supportedHelpers {
 			if !checkCmd(h.name) {
 				continue
 			}
-			if argAurHelper != "" && h.name != argAurHelper {
-				log.Infof("%s is available but %s was requested", h.name, argAurHelper)
+			if args.AurHelper != "" && h.name != args.AurHelper {
+				log.Infof("%s is available but %s was requested", h.name, args.AurHelper)
 				continue
 			}
 			aur = h
@@ -177,125 +124,104 @@ func main() {
 	default:
 		log.Fatalf("unsupported distro %s", distro)
 	}
+}
 
-	if argNoCache {
-		cacheFp = ""
-		log.Info("No cache file")
-	} else if argCacheFile != defaultCache {
-		cacheFp = argCacheFile
-		if checkFileRead(cacheFp) && !checkFileWrite(cacheFp) {
+func setupCache() {
+	if args.NoCache {
+		cache.fp = ""
+		log.Info("cache file disabled")
+	} else if args.CacheFile != "" {
+		cache.fp = args.CacheFile
+		if checkFileRead(cache.fp) && !checkFileWrite(cache.fp) {
 			log.Fatal("cache file is not writable")
 		}
-		log.Infof("Using provided cache file: %s", cacheFp)
+		log.Infof("cache file: %s", cache.fp)
 	} else {
-		cacheFp, err = getCachePath()
-		if err != nil {
-			log.Fatalf("No suitable cache file: %v", err)
-		}
-		log.Infof("Using auto path for cache file: %s", cacheFp)
-	}
-	cache = InternalCache{
-		f:       api.File{},
-		fp:      cacheFp,
-		logFp:   logFp,
-		logFunc: logFunc,
-		ws:      &WsFeed{listeners: make(map[uint16]chan struct{})},
-	}
-	if argSystemd {
-		listeners, err := activation.Listeners()
-		if err != nil {
-			log.Panic(err)
-		}
-
-		if len(listeners) != 1 {
-			log.Panic("Unexpected number of socket activation fds")
-		}
-		listener = listeners[0]
-	} else if argDaemon {
-		listener, err = net.Listen("tcp", argListenAddress)
-		if err != nil {
-			log.Panicf("Cannot listen: %s", err)
-		}
-	}
-
-	if argSystemd || argDaemon {
-		if !argNoRefresh {
-			log.Infof("Auto-refresh every %v", argCacheInterval)
-			go func() {
-				ticker := time.NewTicker(argCacheInterval)
-				for {
-					select {
-					case <-ticker.C:
-						log.Debug("auto-refresh ticker")
-						if err = cache.Update(); err != nil {
-							log.Error(err)
-						}
-					}
-				}
-			}()
-		} else {
-			log.Info("No auto-refresh")
-		}
-		if argWatch {
-			if cache.logFp == "" {
-				log.Errorf("cannot watch, unsupported package manager")
-			} else {
-				log.Infof("watching %s, checking every %s", cache.logFp, argWatchInterval)
-				go cache.WatchLogs(argWatchInterval)
-			}
-		}
-		http.HandleFunc("/api", HandleAPI)
-		http.HandleFunc("/ws", HandleWS)
-		if cache.NeedsUpdate(argCacheInterval) {
-			if err = cache.Update(); err != nil {
-				log.Errorf("Refresh failed: %v", err)
-			}
-			log.Infof("Found %d updates", len(cache.f.Updates))
-		}
-		log.Infof("Listening on %s", listener.Addr().String())
-		err = http.Serve(listener, nil)
-		if err != http.ErrServerClosed {
-			log.Errorf("HTTP serve error: %v", err)
-			os.Exit(2)
-		}
-		os.Exit(0)
-	}
-
-	// No HTTP stuff, just run normally
-	if !cache.NeedsUpdate(argCacheInterval) {
-		log.Info("No update required")
-		return
-	}
-	if err = cache.Update(); err != nil {
-		log.Errorf("Refresh failed: %v", err)
-		return
-	}
-	// Print to console if we aren't using cache
-	if argNoCache {
-		for _, u := range cache.f.Updates {
-			tmp := u.Pkg
-			if u.OldVer != "" {
-				tmp += fmt.Sprintf(" %s", u.OldVer)
-			}
-			tmp += fmt.Sprintf(" -> %s", u.NewVer)
-			if u.Repo != "" {
-				tmp += fmt.Sprintf(" [%s]", u.Repo)
-			}
-			fmt.Printf("%s\n", tmp)
-		}
+		log.Warnf("no cache file path set")
 	}
 }
 
-func startupRefresh(interval time.Duration) error {
-	if !cache.NeedsUpdate(interval) {
-		log.Info("No update required")
-		return nil
+func runDaemon(listener net.Listener) {
+	if !args.NoRefresh {
+		log.Infof("auto-refresh every %v", args.CacheInterval)
+		go func() {
+			ticker := time.NewTicker(args.CacheInterval)
+			for {
+				select {
+				case <-ticker.C:
+					log.Debug("auto-refresh ticker")
+					if err := cache.Update(); err != nil {
+						log.Error(err)
+					}
+				}
+			}
+		}()
+	} else {
+		log.Info("auto-refresh disabled")
 	}
+	if args.Watch {
+		if cache.logFp == "" {
+			log.Errorf("cannot watch, unsupported package manager")
+		} else {
+			log.Infof("watching %s, checking every %s", cache.logFp, args.WatchInterval)
+			go cache.WatchLogs(args.WatchInterval)
+		}
+	}
+	http.HandleFunc("/api", HandleAPI)
+	http.HandleFunc("/ws", HandleWS)
+	if cache.NeedsUpdate(args.CacheInterval) {
+		if err := cache.Update(); err != nil {
+			log.Errorf("refresh failed: %v", err)
+		}
+		log.Infof("found %d updates", len(cache.f.Updates))
+	}
+	log.Infof("listening on %s", listener.Addr().String())
+	err := http.Serve(listener, nil)
+	if err != http.ErrServerClosed {
+		log.Errorf("HTTP serve error: %v", err)
+		os.Exit(2)
+	}
+	os.Exit(0)
+}
 
-	err := cache.Update()
-	if err != nil {
-		log.Errorf("Startup refresh failed: %v", err)
-		return err
+func runForeground() {
+	if !cache.NeedsUpdate(args.CacheInterval) {
+		log.Info("no update required")
+		return
 	}
-	return nil
+	if err := cache.Update(); err != nil {
+		log.Errorf("refresh failed: %v", err)
+		return
+	}
+	// Print to console
+	fmt.Print(cache.f.String())
+}
+
+func main() {
+	args.CacheFile, _ = getCachePath()
+	args.CacheInterval, _ = time.ParseDuration(defaultWait)
+	arg.MustParse(&args)
+
+	setupLogging()
+	setupDistro()
+	setupCache()
+
+	if args.Systemd {
+		listeners, err := activation.Listeners()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if len(listeners) != 1 {
+			log.Fatal("unexpected number of socket activation fds")
+		}
+		runDaemon(listeners[0])
+	} else if args.Daemon {
+		listener, err := net.Listen("tcp", args.ListenAddress)
+		if err != nil {
+			log.Fatalf("cannot listen: %s", err)
+		}
+		runDaemon(listener)
+	} else {
+		runForeground()
+	}
 }

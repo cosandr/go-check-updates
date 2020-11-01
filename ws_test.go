@@ -11,17 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cosandr/go-check-updates/api"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/cosandr/go-check-updates/api"
 )
 
 func TestWS(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
-	cache = InternalCache{
-		f:  api.File{},
-		ws: &WsFeed{listeners: make(map[uint16]chan struct{})},
-	}
+	cache = NewInternalCache()
 	addr := "127.0.0.1:1234"
 	clientAddr := url.URL{Scheme: "ws", Host: addr, Path: "/ws"}
 	interrupt := make(chan struct{})
@@ -60,9 +58,9 @@ func TestWS(t *testing.T) {
 			cache.f.Checked = time.Now().Format(time.RFC3339)
 			cache.ws.Broadcast()
 			sent[i] = len(updates)
-			log.Infof("Set new updates iter %d", i)
+			log.Infof("set new updates iter %d", i)
 			newDur := time.Duration(rand.Intn(10)) * time.Second
-			log.Infof("Ticker duration changed to %.0f seconds", newDur.Seconds())
+			log.Infof("ticker duration changed to %.0f seconds", newDur.Seconds())
 			ticker = time.NewTicker(newDur)
 		}
 	}
@@ -73,16 +71,16 @@ func TestWS(t *testing.T) {
 	close(interrupt)
 	wg.Wait()
 	// Check data
-	log.Debugf("Sent: %v", sent)
-	log.Debugf("Received: %v", recv)
+	log.Debugf("sent: %v", sent)
+	log.Debugf("received: %v", recv)
 	for i, r := range recv {
 		if len(r) != len(sent) {
-			t.Errorf("Client %d got updates %d times, expected %d", i, len(r), len(sent))
+			t.Errorf("client %d got updates %d times, expected %d", i, len(r), len(sent))
 			continue
 		}
 		for j, n := range r {
 			if sent[j] != n {
-				t.Errorf("Client %d got %d updates, expected %d", i, n, sent[j])
+				t.Errorf("client %d got %d updates, expected %d", i, n, sent[j])
 			}
 		}
 	}
@@ -98,7 +96,7 @@ func runServer(addr string, wg *sync.WaitGroup) *http.Server {
 			log.Fatalf("serve error: %v", err)
 		}
 	}()
-	log.Infof("Listening on %s", addr)
+	log.Infof("listening on %s", addr)
 	return srv
 }
 
@@ -114,7 +112,7 @@ func runClient(addr string, interrupt chan struct{}, num int, wg *sync.WaitGroup
 	done := make(chan struct{})
 	ping := make(chan struct{})
 	var empty struct{}
-	log.Infof("Client %d connected to %s", num, addr)
+	log.Infof("client %d connected to %s", num, addr)
 
 	go func() {
 		defer close(done)
@@ -122,21 +120,21 @@ func runClient(addr string, interrupt chan struct{}, num int, wg *sync.WaitGroup
 			msgType, message, err := c.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure) {
-					log.Errorf("Client %d read: %v", num, err)
+					log.Errorf("client %d read: %v", num, err)
 				}
 				return
 			}
 			switch msgType {
 			case websocket.PingMessage:
-				log.Infof("Client %d received ping", num)
+				log.Infof("client %d received ping", num)
 				ping <- empty
 			default:
 				var data api.File
 				err = json.Unmarshal(message, &data)
 				if err != nil {
-					log.Warnf("Client %d cannot unmarshal message: %s", num, message)
+					log.Warnf("client %d cannot unmarshal message: %s", num, message)
 				} else {
-					log.Infof("Client %d got %d updates", num, len(data.Updates))
+					log.Infof("client %d got %d updates", num, len(data.Updates))
 					*recv = append(*recv, len(data.Updates))
 				}
 			}
@@ -148,20 +146,20 @@ func runClient(addr string, interrupt chan struct{}, num int, wg *sync.WaitGroup
 		case <-done:
 			return
 		case <-ping:
-			log.Infof("Client %d sending pong", num)
+			log.Infof("client %d sending pong", num)
 			err := c.WriteMessage(websocket.PongMessage, nil)
 			if err != nil {
-				log.Errorf("Client %d write: %v", num, err)
+				log.Errorf("client %d write: %v", num, err)
 				return
 			}
 		case <-interrupt:
-			log.Infof("Client %d interrupt", num)
+			log.Infof("client %d interrupt", num)
 
 			// Cleanly close the connection by sending a close message and then
 			// waiting (with timeout) for the server to close the connection.
 			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
-				log.Errorf("Client %d write close: %v", num, err)
+				log.Errorf("client %d write close: %v", num, err)
 				return
 			}
 			select {

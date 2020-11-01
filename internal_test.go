@@ -12,14 +12,10 @@ import (
 
 func TestWatchLogs(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
-	cache = InternalCache{
-		f: api.File{
-			Checked: "2020-05-29T23:00:00+02:00",
-		},
-		logFp:   "/tmp/test_watch.log",
-		logFunc: checkPacmanLogs,
-		ws:      &WsFeed{listeners: make(map[uint16]chan struct{})},
-	}
+	cache = NewInternalCache()
+	cache.f.Checked = "2020-05-29T23:00:00+02:00"
+	cache.logFp = "/tmp/test_watch.log"
+	cache.logFunc = checkPacmanLogs
 	write := func(content string) error {
 		err := ioutil.WriteFile(cache.logFp, []byte(content), 0644)
 		if err != nil {

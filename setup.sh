@@ -172,7 +172,7 @@ case "$1" in
         if [[ -n $LOG_FILE ]]; then
             systemd_env+="Environment=LOG_FILE=\"$LOG_FILE\"${_nl}"
         else
-            systemd_env+="Environment=NO_LOG=1${_nl}"
+            systemd_env+="Environment=NO_LOG_FILE=1${_nl}"
         fi
         if [[ -n $WATCH_INTERVAL ]]; then
             systemd_env+="Environment=WATCH_ENABLE=1${_nl}"
@@ -197,7 +197,7 @@ Requires=network.target
 
 [Service]
 $systemd_env
-ExecStart=$PKG_PATH -systemd
+ExecStart=$PKG_PATH --systemd
 EOF
         ;;
     pacman-hook)

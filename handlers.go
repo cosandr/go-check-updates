@@ -8,10 +8,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/cosandr/go-check-updates/api"
 )
+
+var upgrader = websocket.Upgrader{}
 
 // HandleAPI returns updates or cache file location, one of filepath or updates params is required
 //
@@ -25,7 +28,7 @@ import (
 // - immediate: used with refresh, return response without waiting for update to finish
 func HandleAPI(w http.ResponseWriter, r *http.Request) {
 	var start time.Time
-	log.Debugf("GET - %s - %s", r.RemoteAddr, r.RequestURI)
+	log.Debugf("HandleAPI: GET - %s - %s", r.RemoteAddr, r.RequestURI)
 	if log.GetLevel() == log.DebugLevel {
 		start = time.Now()
 	}
@@ -33,11 +36,10 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 	var resp api.Response
 	defer func() {
 		if log.GetLevel() == log.DebugLevel {
-			log.Debugf("request done in %dms", time.Since(start).Milliseconds())
+			log.Debugf("HandleAPI: request done in %dms", time.Since(start).Milliseconds())
 		}
-		log.Debug("HandleAPI: Marshalling response")
 		d, _ := json.Marshal(&resp)
-		log.Debugf("HandleAPI: Sending response:\n%s", string(d))
+		log.Debugf("HandleAPI: sending response:\n%s", string(d))
 		_, _ = w.Write(d)
 	}()
 	params := r.URL.Query()
@@ -45,14 +47,14 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 	_, filepath := params["filepath"]
 	_, refresh := params["refresh"]
 	if !(updates || filepath || refresh) {
-		log.Debug("HandleAPI: Missing arguments")
+		log.Debug("HandleAPI: missing arguments")
 		resp.Error = "filepath, updates and/or refresh parameter(s) required"
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 	if refresh {
 		if _, useLog := params["log_file"]; useLog {
-			log.Debug("HandleAPI: Update from package manager log file")
+			log.Debug("HandleAPI: update from package manager log file")
 			if cache.f.Checked == "" {
 				resp.Error = fmt.Sprintf("Updates were never checked, cannot update from logs.")
 				w.WriteHeader(http.StatusBadRequest)
@@ -75,40 +77,40 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
-				log.Debug("HandleAPI: Conditional cache file update requested")
+				log.Debug("HandleAPI: conditional cache file update requested")
 				willRefresh = cache.NeedsUpdate(every)
 			} else {
-				log.Debug("HandleAPI: Unconditional cache file update requested")
+				log.Debug("HandleAPI: unconditional cache file update requested")
 				willRefresh = true
 			}
 			if willRefresh {
-				log.Debug("HandleAPI: Cache file refreshing")
+				log.Debug("HandleAPI: cache file refreshing")
 				if immediate {
 					go cache.Update()
-					log.Debug("HandleAPI: Cache file update queued")
+					log.Debug("HandleAPI: cache file update queued")
 					tmp := true
 					resp.Queued = &tmp
 					w.WriteHeader(http.StatusAccepted)
 				} else {
-					log.Debug("HandleAPI: Cache file updating")
+					log.Debug("HandleAPI: cache file updating")
 					err := cache.Update()
 					if err != nil {
-						log.Errorf("Update failed: %v", err)
+						log.Errorf("HandleAPI: update failed: %v", err)
 						resp.Error = fmt.Sprintf("Cannot update cache file: %v", err)
 						w.WriteHeader(http.StatusInternalServerError)
 						return
 					}
-					log.Debug("HandleAPI: Cache file updated")
+					log.Debug("HandleAPI: cache file updated")
 				}
 			}
 		}
 	}
 	if filepath {
-		log.Debugf("HandleAPI: File path requested: %s", cache.fp)
+		log.Debugf("HandleAPI: file path requested: %s", cache.fp)
 		resp.FilePath = cache.fp
 	}
 	if updates {
-		log.Debug("HandleAPI: Updates requested")
+		log.Debug("HandleAPI: updates requested")
 		f, err := cache.GetFile()
 		if err != nil {
 			log.Errorf("HandleAPI: %v", err)
@@ -116,7 +118,7 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		log.Debug("HandleAPI: Setting response data to cache file content")
+		log.Debug("HandleAPI: setting response data to cache file content")
 		resp.Data = &f
 	}
 	return
@@ -124,10 +126,10 @@ func HandleAPI(w http.ResponseWriter, r *http.Request) {
 
 // HandleWS sends notifications when updates are refreshed
 func HandleWS(w http.ResponseWriter, r *http.Request) {
-	log.Debugf("GET - %s - %s", r.RemoteAddr, r.RequestURI)
+	log.Debugf("HandleWS: GET - %s - %s", r.RemoteAddr, r.RequestURI)
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Print("upgrade:", err)
+		log.Errorf("HandleWS: upgrade: %v", err)
 		return
 	}
 	var wg sync.WaitGroup
