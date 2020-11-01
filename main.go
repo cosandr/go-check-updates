@@ -49,7 +49,12 @@ func getLogLevels(level log.Level) []log.Level {
 	return ret
 }
 
-func setupLogging() {
+func setupLogging() *os.File {
+	var (
+		logLevel log.Level
+		err      error
+		file     *os.File
+	)
 	if args.Systemd || args.Daemon {
 		// Disable timestamps when running in background mode
 		// They are not needed as these modes are most likely used with systemd
@@ -59,8 +64,6 @@ func setupLogging() {
 		log.SetFormatter(&log.TextFormatter{FullTimestamp: true})
 	}
 	log.SetOutput(ioutil.Discard)
-	var logLevel log.Level
-	var err error
 	if args.Debug {
 		logLevel = log.DebugLevel
 	} else {
@@ -78,16 +81,17 @@ func setupLogging() {
 		})
 	}
 	if !args.NoLogFile && args.LogFile != "" {
-		file, err := os.OpenFile(args.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		file, err = os.OpenFile(args.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
-			log.Fatal(err)
+			log.Error(err)
+		} else {
+			log.AddHook(&writer.Hook{
+				Writer:    file,
+				LogLevels: levels,
+			})
 		}
-		defer file.Close()
-		log.AddHook(&writer.Hook{
-			Writer:    file,
-			LogLevels: levels,
-		})
 	}
+	return file
 }
 
 func setupDistro() {
@@ -202,7 +206,10 @@ func main() {
 	args.CacheInterval, _ = time.ParseDuration(defaultWait)
 	arg.MustParse(&args)
 
-	setupLogging()
+	file := setupLogging()
+	if file != nil {
+		defer file.Close()
+	}
 	setupDistro()
 	setupCache()
 
