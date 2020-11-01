@@ -38,7 +38,9 @@ func main() {
 		argNoRefresh       bool
 		argQuiet           bool
 		argSystemd         bool
+		argWatch           bool
 		argCacheInterval   time.Duration
+		argWatchInterval   time.Duration
 		argCacheFile       string
 		argListenAddress   string
 		argLogFile         string
@@ -64,6 +66,8 @@ func main() {
 	flag.DurationVar(&argCacheInterval, "cache.interval", defaultInterval, "Time interval between cache updates, env CACHE_INTERVAL")
 	flag.StringVar(&argLogFile, "log.file", "", "Path to log file, env LOG_FILE")
 	flag.StringVar(&argListenAddress, "web.listen-address", ":8100", "Web server listen address, env LISTEN_ADDRESS")
+	flag.BoolVar(&argWatch, "watch.enable", false, "Watch for package manager log file updates, env WATCH_ENABLE")
+	flag.DurationVar(&argWatchInterval, "watch.interval", 10*time.Second, "Time interval between package manager log file checks, env WATCH_INTERVAL")
 	flag.Parse()
 	// Get from environment
 	if v := os.Getenv("NO_CACHE"); v == "1" {
@@ -86,6 +90,15 @@ func main() {
 		argNoLog = true
 	} else if v := os.Getenv("LOG_FILE"); v != "" {
 		argLogFile = v
+	}
+	if v := os.Getenv("WATCH_ENABLE"); v == "1" {
+		argWatch = true
+	}
+	if v := os.Getenv("WATCH_INTERVAL"); v != "" {
+		argWatchInterval, err = time.ParseDuration(v)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	//
 	// Logging setup
@@ -222,6 +235,14 @@ func main() {
 			}()
 		} else {
 			log.Info("No auto-refresh")
+		}
+		if argWatch {
+			if cache.logFp == "" {
+				log.Errorf("cannot watch, unsupported package manager")
+			} else {
+				log.Infof("watching %s, checking every %s", cache.logFp, argWatchInterval)
+				go cache.WatchLogs(argWatchInterval)
+			}
 		}
 		http.HandleFunc("/api", HandleAPI)
 		http.HandleFunc("/ws", HandleWS)

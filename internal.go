@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -101,21 +102,48 @@ func (ic *InternalCache) Update() error {
 		err = ic.Write()
 	}
 	ic.ws.Broadcast()
-	log.Debug("Update: WS broadcast")
+	log.Debug("InternalCache.Update: WS broadcast")
 	return err
 }
 
 // RefreshFromLogs updates cache by reading package manager logs
 func (ic *InternalCache) RefreshFromLogs() error {
 	if ic.logFp == "" {
-		return fmt.Errorf("no package manager log file path")
+		return fmt.Errorf("InternalCache.RefreshFromLogs: no package manager log file path")
 	}
 	if err := ic.logFunc(ic.logFp); err != nil {
 		return err
 	}
 	ic.ws.Broadcast()
-	log.Debug("RefreshFromLogs: WS broadcast")
+	log.Debug("InternalCache.RefreshFromLogs: WS broadcast")
 	return nil
+}
+
+// WatchLogs checks the package manager log according to the interval
+// and calls RefreshFromLogs if the file changed.
+func (ic *InternalCache) WatchLogs(interval time.Duration) {
+	var last time.Time
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			info, err := os.Stat(ic.logFp)
+			if err != nil {
+				log.Errorf("InternalCache.WatchLogs: %v", err)
+				continue
+			}
+			if info.ModTime().Equal(last) {
+				log.Debugf("InternalCache.WatchLogs: %s modified time unchanged", ic.logFp)
+				continue
+			}
+			last = info.ModTime()
+			err = ic.RefreshFromLogs()
+			if err != nil {
+				log.Error(err)
+			}
+		}
+	}
 }
 
 // GetFile returns a copy of internal cache file

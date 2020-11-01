@@ -9,7 +9,7 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
 fi
 
 OPTIONS=h
-LONGOPTS=help,bin-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:
+LONGOPTS=help,bin-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:,no-watch,watch-interval
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -29,6 +29,7 @@ HOOK_PATH="/usr/share/libalpm/hooks"
 LISTEN_ADDRESS="/run/$PKG_NAME.sock"
 LOG_FILE="/var/log/${PKG_NAME}.log"
 SYSTEMD_PATH="/usr/lib/systemd/system"
+WATCH_INTERVAL="10s"
 
 print_help () {
 # Using a here doc with standard out.
@@ -52,8 +53,10 @@ Options:
       --no-cache        Disable cache file
       --no-log          Disable log file
       --no-refresh      Disable auto-refresh
+      --no-watch        Disable package manager log file watching
       --pkg-name        Change package name (default $PKG_NAME)
       --systemd-path    Path where systemd units are installed (default $SYSTEMD_PATH)
+      --watch-interval  Change watch interval (default $WATCH_INTERVAL)
 "
 }
 
@@ -97,6 +100,10 @@ while true; do
             ;;
         --no-refresh)
             CACHE_INTERVAL=""
+            shift
+            ;;
+        --no-watch)
+            WATCH_INTERVAL=""
             shift
             ;;
         --pkg-name)
@@ -166,6 +173,10 @@ case "$1" in
             systemd_env+="Environment=LOG_FILE=\"$LOG_FILE\"${_nl}"
         else
             systemd_env+="Environment=NO_LOG=1${_nl}"
+        fi
+        if [[ -n $WATCH_INTERVAL ]]; then
+            systemd_env+="Environment=WATCH_ENABLE=1${_nl}"
+            systemd_env+="Environment=WATCH_INTERVAL=\"$WATCH_INTERVAL\"${_nl}"
         fi
         set +e
         echo -e "\n########## Systemd socket ##########\n"

@@ -29,7 +29,7 @@ pkgver() {
 
 build() {
     cd "${_pkgname}"
-    _args="--pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./ --no-log --no-cache"
+    _args="--pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./ --no-log --no-cache --no-watch"
     ./setup.sh systemd $_args
     ./setup.sh pacman-hook $_args
     go mod vendor
