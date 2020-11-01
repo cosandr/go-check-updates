@@ -132,6 +132,7 @@ be combined with this one
   - `every` value parsed as time duration, it will only refresh if the file is older than this duration
   - `immediate` won't wait for the request to finish before returning, returned data (if requested) is likely
     out of date
+  - `log_file` refresh using package manager log file
     
 Status codes:
 

@@ -139,6 +139,8 @@ func main() {
 	switch distro {
 	case "fedora":
 		updateFunc = UpdateDnf
+		logFp = "/var/log/dnf.rpm.log"
+		logFunc = checkDnfLogs
 	case "arch":
 		logFp = "/var/log/pacman.log"
 		logFunc = checkPacmanLogs
