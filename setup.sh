@@ -9,7 +9,7 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
 fi
 
 OPTIONS=h
-LONGOPTS=help,bin-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:,no-watch,watch-interval
+LONGOPTS=help,bin-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:,no-watch,watch-interval:
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -115,6 +115,10 @@ while true; do
             ;;
         --systemd-path)
             SYSTEMD_PATH="$2"
+            shift 2
+            ;;
+        --watch-interval)
+            WATCH_INTERVAL="$2"
             shift 2
             ;;
         --)
