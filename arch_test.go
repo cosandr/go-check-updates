@@ -9,7 +9,105 @@ import (
 	"github.com/cosandr/go-check-updates/api"
 )
 
-func TestPacmanLogs(t *testing.T) {
+func TestArchParsePacmanCheckUpdates(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	cache = NewInternalCache()
+	out := `
+cuda 11.1.0-2 -> 11.1.1-1
+haskell-aeson 1.5.4.1-9 -> 1.5.4.1-10
+haskell-assoc 1.0.2-22 -> 1.0.2-23
+haskell-attoparsec 0.13.2.4-30 -> 0.13.2.4-31
+haskell-base-compat-batteries 0.11.2-6 -> 0.11.2-7
+lib32-vulkan-icd-loader 1.2.153-2 -> 1.2.158-1
+libinput 1.16.2-1 -> 1.16.3-1
+python-kiwisolver 1.3.0-1 -> 1.3.1-1
+shellcheck 0.7.1-167 -> 0.7.1-168
+vulkan-icd-loader 1.2.153-2 -> 1.2.158-1
+`
+	actual := parsePacmanCheckUpdates(out, rePacman, "pacman")
+	expected := []api.Update{
+		{
+			Pkg:    "cuda",
+			OldVer: "11.1.0-2",
+			NewVer: "11.1.1-1",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "haskell-aeson",
+			OldVer: "1.5.4.1-9",
+			NewVer: "1.5.4.1-10",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "haskell-assoc",
+			OldVer: "1.0.2-22",
+			NewVer: "1.0.2-23",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "haskell-attoparsec",
+			OldVer: "0.13.2.4-30",
+			NewVer: "0.13.2.4-31",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "haskell-base-compat-batteries",
+			OldVer: "0.11.2-6",
+			NewVer: "0.11.2-7",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "lib32-vulkan-icd-loader",
+			OldVer: "1.2.153-2",
+			NewVer: "1.2.158-1",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "libinput",
+			OldVer: "1.16.2-1",
+			NewVer: "1.16.3-1",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "python-kiwisolver",
+			OldVer: "1.3.0-1",
+			NewVer: "1.3.1-1",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "shellcheck",
+			OldVer: "0.7.1-167",
+			NewVer: "0.7.1-168",
+			Repo:   "pacman",
+		},
+		{
+			Pkg:    "vulkan-icd-loader",
+			OldVer: "1.2.153-2",
+			NewVer: "1.2.158-1",
+			Repo:   "pacman",
+		},
+	}
+	if len(actual) != len(expected) {
+		t.Errorf("expected %d updates, got %d", len(expected), len(actual))
+	}
+	for i, a := range actual {
+		e := expected[i]
+		if a.Pkg != e.Pkg {
+			t.Errorf("expected name %s, got %s", e.Pkg, a.Pkg)
+		}
+		if a.OldVer != e.OldVer {
+			t.Errorf("expected old version %s, got %s", e.OldVer, a.OldVer)
+		}
+		if a.NewVer != e.NewVer {
+			t.Errorf("expected new version %s, got %s", e.NewVer, a.NewVer)
+		}
+		if a.Repo != e.Repo {
+			t.Errorf("expected repo %s, got %s", e.Repo, a.Repo)
+		}
+	}
+}
+
+func TestArchPacmanLogs(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	cache = NewInternalCache()
 	cache.f.Checked = "2020-05-29T23:00:00+02:00"

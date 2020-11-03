@@ -41,7 +41,10 @@ type updRes struct {
 
 const pacmanTimeFmt = "2006-01-02T15:04:05-0700" // old format "2006-01-02 15:04"
 
-var rePacman = regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<oldver>\S+)\s+->\s+(?P<newver>\S+)\s*$`)
+// Group 1: name
+// Group 2: old version
+// Group 3: new version
+var rePacman = regexp.MustCompile(`(?m)^\s*(\S+)\s+(\S+)\s+->\s+(\S+)\s*$`)
 
 // Group 1: timestamp
 // Group 2: action (installed, upgraded, removed)
@@ -53,17 +56,17 @@ var rePacmanLog = regexp.MustCompile(`^\[(\S+)\]\s\[ALPM\]\s(\w+)\s(\S+)\s\((.*)
 var supportedHelpers = []helper{
 	{
 		name: "yay",
-		args: "-Qua",
+		args: "-Qua --color=never",
 		re:   rePacman,
 	},
 	{
 		name: "paru",
-		args: "-Qua",
+		args: "-Qua --color=never",
 		re:   rePacman,
 	},
 	{
 		name: "pikaur",
-		args: "-Qua",
+		args: "-Qua --color=never",
 		re:   rePacman,
 	},
 }
@@ -83,15 +86,7 @@ func procPacman(ch chan<- updRes) {
 		}
 		return
 	}
-
-	for _, m := range rePacman.FindAllStringSubmatch(raw, -1) {
-		var u api.Update
-		u.Pkg = m[1]
-		u.OldVer = m[2]
-		u.NewVer = m[3]
-		u.Repo = "pacman"
-		res.upd = append(res.upd, u)
-	}
+	res.upd = parsePacmanCheckUpdates(raw, rePacman, "pacman")
 }
 
 func procAUR(ch chan<- updRes) {
@@ -122,14 +117,7 @@ func procAUR(ch chan<- updRes) {
 		res.err = fmt.Errorf("regex for %s is nil", aur.name)
 		return
 	}
-	for _, m := range aur.re.FindAllStringSubmatch(raw, -1) {
-		var u api.Update
-		u.Pkg = m[1]
-		u.OldVer = m[2]
-		u.NewVer = m[3]
-		u.Repo = "aur"
-		res.upd = append(res.upd, u)
-	}
+	res.upd = parsePacmanCheckUpdates(raw, aur.re, "aur")
 }
 
 // UpdateArch uses checkupdates and (if available) a supported AUR helper to get available updates
@@ -157,6 +145,19 @@ func UpdateArch() (updates []api.Update, err error) {
 		}
 	}
 	return
+}
+
+func parsePacmanCheckUpdates(out string, re *regexp.Regexp, repo string) []api.Update {
+	updates := make([]api.Update, 0)
+	for _, m := range re.FindAllStringSubmatch(out, -1) {
+		updates = append(updates, api.Update{
+			Pkg:    m[1],
+			OldVer: m[2],
+			NewVer: m[3],
+			Repo:   repo,
+		})
+	}
+	return updates
 }
 
 // checkPacmanLogs read pacman log file and update internal cache accordingly
