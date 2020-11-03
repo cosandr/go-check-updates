@@ -30,7 +30,10 @@ import (
 const dnfTimeFmt = "2006-01-02T15:04:05-0700"
 const OldDnfTimeFmt = "2006-01-02T15:04:05Z0700"
 
-var reYum = regexp.MustCompile(`(?m)^\s*(?P<pkg>\S+)\s+(?P<repo>\S+)\s+(?P<ver>\S+)\s*$`)
+// Group 1: name (without arch)
+// Group 2: version
+// Group 3: repo
+var reYum = regexp.MustCompile(`(?m)^\s*(\S+)(?:\.\S+)\s+(\S+)\s+(\S+)\s*$`)
 
 // Group 1: timestamp
 // Group 2: action (Installed, Upgrade, Upgraded, Erase)
@@ -54,25 +57,29 @@ func runYum(name string) (retStr string, err error) {
 }
 
 // UpdateDnf uses dnf or yum to get available updates
-func UpdateDnf() (updates []api.Update, err error) {
-	var rawOut string
-	rawOut, err = runYum("dnf")
+func UpdateDnf() ([]api.Update, error) {
+	rawOut, err := runYum("dnf")
 	// Try yum instead
 	if err != nil {
 		rawOut, err = runYum("yum")
 	}
 	// Both failed
 	if err != nil {
-		return
+		return []api.Update{}, err
 	}
-	for _, m := range reYum.FindAllStringSubmatch(rawOut, -1) {
-		var u api.Update
-		u.Pkg = m[1]
-		u.NewVer = m[2]
-		u.Repo = m[3]
-		updates = append(updates, u)
+	return parseYumCheckUpdate(rawOut), nil
+}
+
+func parseYumCheckUpdate(out string) []api.Update {
+	updates := make([]api.Update, 0)
+	for _, m := range reYum.FindAllStringSubmatch(out, -1) {
+		updates = append(updates, api.Update{
+			Pkg:    m[1],
+			NewVer: m[2],
+			Repo:   m[3],
+		})
 	}
-	return
+	return updates
 }
 
 // checkDnfLogs read dnf.rpm log file and update internal cache accordingly
