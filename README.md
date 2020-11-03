@@ -15,29 +15,35 @@ It can be disabled completely with `--no-cache`.
 The refresh interval can be changed with the `--cache.interval` option, disable with `--no-refresh`.
 Disabled without daemon mode will refresh every time it is run, with daemon mode there is no auto-refresh.
 
+It is also possible to monitor the package manager logs, this functionality can be enabled with `-w` or `--watch.enable`.
+Enabled by default when using `setup.sh` to generate systemd units.
+
 See `go-check-updates -h` for up to date information on the parameters.
 
 This can then be read by other scripts, for example my own [go-motd](https://github.com/cosandr/go-motd).
 
 ## Supported package managers
 
-Manager | Pkg | Old Ver | New Ver | Repo | Logs
+Manager | Name | Old Ver | New Ver | Repo | Logs
 --- | --- | --- | --- | --- | ---
 pacman | Y | Y | Y | N* | Y
-dnf/yum | Y | N | Y | Y | N
+dnf/yum | Y | N | Y | Y | Y
 
 \* Repo is set to "pacman"
 
-NOTE: dnf/yum only work with Fedora, [redhat.go](./redhat.go) is supposed to work
-with other distros using dnf/yum (RHEL, CentOS) however I don't know what their ID is
-in `/etc/os-release`. If you know, feel free to add it to the switch case in [internal.go](./internal.go)
+NOTE: pacman only tested on Arch Linux, dnf/yum only tested on Fedora
 
 ## Supported AUR helpers
-* pikaur
-* yay
-* paru
 
-Repo to "aur"
+Manager | Name | Old Ver | New Ver | Repo | Logs
+--- | --- | --- | --- | --- | ---
+yay | Y | Y | Y | N* | N/A
+pikaur | Y | Y | Y | N* | N/A
+paru | Y | Y | Y | N* | N/A
+
+\* Repo to "aur"
+
+NOTE: Only tested on Arch Linux
 
 ## Installation
 

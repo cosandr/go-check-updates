@@ -101,11 +101,11 @@ func setupDistro() {
 		log.Fatalln(err)
 	}
 	switch distro {
-	case "fedora":
+	case "fedora", "centos", "rhel":
 		cache.updateFunc = UpdateDnf
 		cache.logFp = "/var/log/dnf.rpm.log"
 		cache.logFunc = checkDnfLogs
-	case "arch":
+	case "arch", "manjaro":
 		cache.logFp = "/var/log/pacman.log"
 		cache.logFunc = checkPacmanLogs
 		cache.updateFunc = UpdateArch
