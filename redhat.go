@@ -28,7 +28,7 @@ import (
 )
 
 const dnfTimeFmt = "2006-01-02T15:04:05-0700"
-const OldDnfTimeFmt = "2006-01-02T15:04:05Z0700"
+const oldDnfTimeFmt = "2006-01-02T15:04:05Z0700"
 
 // Group 1: name (without arch)
 // Group 2: version
@@ -103,7 +103,7 @@ func checkDnfLogs(fp string) error {
 		timestamp, action, name := m[1], m[2], m[3]
 		t, err := time.Parse(dnfTimeFmt, timestamp)
 		if err != nil {
-			t, err = time.Parse(OldDnfTimeFmt, timestamp)
+			t, err = time.Parse(oldDnfTimeFmt, timestamp)
 			if err != nil {
 				log.Debugf("cannot parse '%s': %v", timestamp, err)
 				continue

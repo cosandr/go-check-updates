@@ -14,7 +14,7 @@ import (
 	"github.com/cosandr/go-check-updates/api"
 )
 
-//  NewInternalCache returns a pointer to a new InternalCache struct
+// NewInternalCache returns a pointer to a new InternalCache struct
 func NewInternalCache() *InternalCache {
 	return &InternalCache{
 		f:  api.File{},

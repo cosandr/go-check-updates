@@ -13,7 +13,7 @@ license=("MIT")
 provides=("${_pkgname}")
 conflicts=("${_pkgname}")
 depends=("pacman-contrib" "curl")
-optdepends=('pikaur: AUR support')
+optdepends=('pikaur: AUR support' 'yay: AUR support' 'paru: AUR support')
 makedepends=("git" "go")
 source=("git+$url")
 md5sums=("SKIP")
@@ -29,9 +29,9 @@ pkgver() {
 
 build() {
     cd "${_pkgname}"
-    _args="--pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./ --no-log --no-cache --no-watch"
-    ./setup.sh systemd $_args
-    ./setup.sh pacman-hook $_args
+    _args="--pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./ --tmp-path ./tmp --no-log --no-cache --no-watch"
+    ./setup.sh install systemd $_args
+    ./setup.sh install hook $_args
     go mod vendor
     go build -o "${_pkgname}"
 }

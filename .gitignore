@@ -1,5 +1,6 @@
-go-check-updates*
+.idea
 .vscode
 *.log
-.idea
-build
+build/
+go-check-updates*
+!packaging/**
