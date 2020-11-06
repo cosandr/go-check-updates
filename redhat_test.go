@@ -117,6 +117,54 @@ samba-common.noarch                                                       2:4.13
 			t.Errorf("expected repo %s, got %s", e.Repo, a.Repo)
 		}
 	}
+	// Test when Obsoleting Packages is present
+	out = `
+kernel-core.x86_64                                                   5.8.18-300.fc33                                             updates
+kernel-devel.x86_64                                                  5.8.18-300.fc33                                             updates
+kernel-headers.x86_64                                                5.8.18-300.fc33                                             updates
+kernel-modules.x86_64                                                5.8.18-300.fc33                                             updates
+Obsoleting Packages
+kernel-headers.x86_64                                                5.8.18-300.fc33                                             updates
+    kernel-headers.x86_64                                            5.8.11-300.fc33                                             @fedora
+`
+	actual = parseYumCheckUpdate(out)
+	expected = []api.Update{
+		{
+			Pkg:    "kernel-core",
+			NewVer: "5.8.18-300.fc33",
+			Repo:   "updates",
+		},
+		{
+			Pkg:    "kernel-devel",
+			NewVer: "5.8.18-300.fc33",
+			Repo:   "updates",
+		},
+		{
+			Pkg:    "kernel-headers",
+			NewVer: "5.8.18-300.fc33",
+			Repo:   "updates",
+		},
+		{
+			Pkg:    "kernel-modules",
+			NewVer: "5.8.18-300.fc33",
+			Repo:   "updates",
+		},
+	}
+	if len(actual) != len(expected) {
+		t.Fatalf("expected %d updates, got %d", len(expected), len(actual))
+	}
+	for i, a := range actual {
+		e := expected[i]
+		if a.Pkg != e.Pkg {
+			t.Errorf("expected name %s, got %s", e.Pkg, a.Pkg)
+		}
+		if a.NewVer != e.NewVer {
+			t.Errorf("expected version %s, got %s", e.NewVer, a.NewVer)
+		}
+		if a.Repo != e.Repo {
+			t.Errorf("expected repo %s, got %s", e.Repo, a.Repo)
+		}
+	}
 }
 
 func TestRedHatDnfLogs(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -72,6 +73,9 @@ func UpdateDnf() ([]api.Update, error) {
 
 func parseYumCheckUpdate(out string) []api.Update {
 	updates := make([]api.Update, 0)
+	if i := strings.Index(out, "Obsoleting Packages"); i > 0 {
+		out = out[:i]
+	}
 	for _, m := range reYum.FindAllStringSubmatch(out, -1) {
 		updates = append(updates, api.Update{
 			Pkg:    m[1],
