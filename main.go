@@ -15,28 +15,33 @@ import (
 )
 
 const (
-	packageName string = "go-check-updates"
-	defaultWait string = "12h"
+	packageName   string = "go-check-updates"
+	defaultWait   string = "12h"
+	defaultNotify string = "1h"
 )
 
 var aur = helper{}
 var cache = NewInternalCache()
 var args struct {
-	AurHelper     string        `arg:"--aur" help:"Override AUR helper (Arch Linux)"`
-	CacheFile     string        `arg:"--cache.file,env:CACHE_FILE" help:"Path to update cache file"`
-	CacheInterval time.Duration `arg:"--cache.interval,env:CACHE_INTERVAL" help:"Time interval between cache updates"`
-	Daemon        bool          `arg:"-d,--daemon" help:"Run as a daemon"`
-	Debug         bool          `arg:"--debug,env:DEBUG" help:"Set console log output to DEBUG"`
-	ListenAddress string        `arg:"--web.listen-address,env:LISTEN_ADDRESS" help:"Web server listen address" default:":8100"`
-	LogFile       string        `arg:"--log.file,env:LOG_FILE" help:"Path to log file"`
-	LogLevel      string        `arg:"--log.level,env:LOG_LEVEL" default:"INFO" help:"Set log level"`
-	NoCache       bool          `arg:"--no-cache,env:NO_CACHE" help:"Don't use cache file"`
-	NoLogFile     bool          `arg:"--no-log,env:NO_LOG_FILE" help:"Don't log to file"`
-	NoRefresh     bool          `arg:"--no-refresh,env:NO_REFRESH" help:"Don't auto-refresh"`
-	Quiet         bool          `arg:"-q,--quiet" help:"Don't log to console"`
-	Systemd       bool          `arg:"--systemd" help:"Run HTTP server using systemd socket activation"`
-	Watch         bool          `arg:"-w,--watch.enable,env:WATCH_ENABLE" help:"Watch for package manager log file updates"`
-	WatchInterval time.Duration `arg:"--watch.interval,env:WATCH_INTERVAL" help:"Time interval between package manager log file checks" default:"10s"`
+	AurHelper      string        `arg:"--aur" help:"Override AUR helper (Arch Linux)"`
+	CacheFile      string        `arg:"--cache.file,env:CACHE_FILE" help:"Path to update cache file"`
+	CacheInterval  time.Duration `arg:"--cache.interval,env:CACHE_INTERVAL" help:"Time interval between cache updates"`
+	Daemon         bool          `arg:"-d,--daemon" help:"Run as a daemon"`
+	Debug          bool          `arg:"--debug,env:DEBUG" help:"Set console log output to DEBUG"`
+	ListenAddress  string        `arg:"--web.listen-address,env:LISTEN_ADDRESS" help:"Web server listen address" default:":8100"`
+	LogFile        string        `arg:"--log.file,env:LOG_FILE" help:"Path to log file"`
+	LogLevel       string        `arg:"--log.level,env:LOG_LEVEL" default:"INFO" help:"Set log level"`
+	NoCache        bool          `arg:"--no-cache,env:NO_CACHE" help:"Don't use cache file"`
+	NoLogFile      bool          `arg:"--no-log,env:NO_LOG_FILE" help:"Don't log to file"`
+	NoRefresh      bool          `arg:"--no-refresh,env:NO_REFRESH" help:"Don't auto-refresh"`
+	Notify         bool          `arg:"--notify.enable,env:NOTIFY_ENABLE" help:"Enable notifications, webhook URL is required"`
+	NotifyInterval time.Duration `arg:"--notify.interval,env:NOTIFY_INTERVAL" help:"Minimum time between notifications"`
+	NotifyFormat   string        `arg:"--notify.format,env:NOTIFY_FORMAT" help:"Time format for embed footer" default:"2006/01/02 15:04"`
+	Quiet          bool          `arg:"-q,--quiet" help:"Don't log to console"`
+	Systemd        bool          `arg:"--systemd" help:"Run HTTP server using systemd socket activation"`
+	Watch          bool          `arg:"-w,--watch.enable,env:WATCH_ENABLE" help:"Watch for package manager log file updates"`
+	WatchInterval  time.Duration `arg:"--watch.interval,env:WATCH_INTERVAL" help:"Time interval between package manager log file checks" default:"10s"`
+	WebhookURL     string        `arg:"--webhook-url,env:WEBHOOK_URL" help:"Discord Webhook URL"`
 }
 
 func getLogLevels(level log.Level) []log.Level {
@@ -134,43 +139,88 @@ func setupCache() {
 	if args.NoCache {
 		cache.fp = ""
 		log.Info("cache file disabled")
-	} else if args.CacheFile != "" {
-		cache.fp = args.CacheFile
-		if checkFileRead(cache.fp) && !checkFileWrite(cache.fp) {
-			log.Fatal("cache file is not writable")
+		return
+	} else if args.CacheFile == "" {
+		log.Warn("no cache file path set")
+		return
+	}
+	cache.fp = args.CacheFile
+	if checkFileRead(cache.fp) && !checkFileWrite(cache.fp) {
+		log.Fatal("cache file is not writable")
+	}
+	log.Infof("cache file: %s", cache.fp)
+}
+
+func setupAutoRefresh() {
+	if args.NoRefresh {
+		log.Info("auto-refresh disabled")
+		return
+	}
+	log.Infof("auto-refresh every %v", args.CacheInterval)
+	go func() {
+		ticker := time.NewTicker(args.CacheInterval)
+		for {
+			select {
+			case <-ticker.C:
+				log.Debug("auto-refresh ticker")
+				if err := cache.Update(); err != nil {
+					log.Error(err)
+				}
+			}
 		}
-		log.Infof("cache file: %s", cache.fp)
+	}()
+}
+
+func setupWatch() {
+	if !args.Watch {
+		log.Info("watch disabled")
+		return
+	}
+	if cache.logFp == "" {
+		log.Error("cannot watch, unsupported package manager")
 	} else {
-		log.Warnf("no cache file path set")
+		log.Infof("watching %s, checking every %s", cache.logFp, args.WatchInterval)
+		go cache.WatchLogs(args.WatchInterval)
 	}
 }
 
-func runDaemon(listener net.Listener) {
-	if !args.NoRefresh {
-		log.Infof("auto-refresh every %v", args.CacheInterval)
-		go func() {
-			ticker := time.NewTicker(args.CacheInterval)
-			for {
-				select {
-				case <-ticker.C:
-					log.Debug("auto-refresh ticker")
-					if err := cache.Update(); err != nil {
-						log.Error(err)
-					}
+func setupNotify() {
+	if !args.Notify {
+		log.Info("notifications disabled")
+		return
+	} else if args.WebhookURL == "" {
+		log.Error("notifications disabled, missing Discord webhook URL")
+		return
+	}
+	log.Infof("notify interval %v", args.NotifyInterval)
+	go func() {
+		sub := cache.ws.Subscribe()
+		defer sub.Unsubscribe()
+		prevUpdates := 0
+		var prevNotify time.Time
+		for {
+			select {
+			case <-sub.ch:
+				log.Debug("notify received broadcast")
+				curUpdates := len(cache.f.Updates)
+				if curUpdates == prevUpdates || time.Since(prevNotify) < args.NotifyInterval {
+					continue
 				}
+				log.Debugf("[notify] update count changed from %d to %d", prevUpdates, curUpdates)
+				if err := sendUpdatesNotification(); err != nil {
+					log.Warnf("failed to send notification: %v", err)
+				}
+				prevUpdates = curUpdates
+				prevNotify = time.Now()
 			}
-		}()
-	} else {
-		log.Info("auto-refresh disabled")
-	}
-	if args.Watch {
-		if cache.logFp == "" {
-			log.Errorf("cannot watch, unsupported package manager")
-		} else {
-			log.Infof("watching %s, checking every %s", cache.logFp, args.WatchInterval)
-			go cache.WatchLogs(args.WatchInterval)
 		}
-	}
+	}()
+}
+
+func runDaemon(listener net.Listener) {
+	setupAutoRefresh()
+	setupWatch()
+	setupNotify()
 	http.HandleFunc("/api", HandleAPI)
 	http.HandleFunc("/ws", HandleWS)
 	if cache.NeedsUpdate(args.CacheInterval) {
@@ -204,6 +254,7 @@ func runForeground() {
 func main() {
 	args.CacheFile, _ = getCachePath()
 	args.CacheInterval, _ = time.ParseDuration(defaultWait)
+	args.NotifyInterval, _ = time.ParseDuration(defaultNotify)
 	arg.MustParse(&args)
 
 	file := setupLogging()

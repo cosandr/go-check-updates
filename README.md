@@ -92,6 +92,7 @@ $ go-check-updates
 ## Example output
 
 Note this is what the API returns in the `data` key, the websocket returns exactly this data directly.
+
 ```json
 {
   "checked": "2020-06-01T23:10:23+02:00",
@@ -118,7 +119,6 @@ Note this is what the API returns in the `data` key, the websocket returns exact
 }
 ```
 
-
 ## API
 
 Run with `--daemon` argument to start a web server,
@@ -139,7 +139,7 @@ be combined with this one
   - `immediate` won't wait for the request to finish before returning, returned data (if requested) is likely
     out of date
   - `log_file` refresh using package manager log file
-    
+
 Status codes:
 
 - `200` request was successful
@@ -153,3 +153,9 @@ Requires web server (daemon or systemd mode). Connect to `/ws` endpoint to recei
 data (same as the JSON file) when updates are refreshed.
 
 Example usage in my [Polybar setup](https://github.com/cosandr/dotfiles/blob/master/dot_config/polybar/scripts/executable_go-check-updates-ws.py).
+
+## Discord notifications
+
+Edit `/etc/sysconfig/go-check-updates` and add `NOTIFY_ENABLE=1` and `WEBHOOK_URL="<url>"`.
+By default notifications are only sent every hour at most (to prevent spam when upgrading packages),
+this can be adjusted with the `NOTIFY_INTERVAL` env variable.
