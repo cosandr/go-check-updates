@@ -4,7 +4,7 @@
 # https://github.com/cosandr/go-check-updates
 %global goipath         github.com/cosandr/go-check-updates
 Version:                0
-%global tag             v1.0-rc1
+%global tag             v1.0-rc2
 
 %gometa
 
@@ -40,15 +40,17 @@ Source0:        %{gosource}
 %build
 go mod vendor
 %gobuild -o %{gobuilddir}/bin/%{name} %{goipath}
-./setup.sh install systemd --pkg-name %{name} --systemd-path ./ --tmp-path ./tmp --no-log --no-cache
+./setup.sh install systemd --pkg-name %{name} --sysconfig-path ./ --systemd-path ./ --tmp-path ./tmp --no-log --no-cache
 
 %install
 %gopkginstall
 install -m 0755 -vd                     %{buildroot}%{_bindir}
 install -m 0755 -vp %{gobuilddir}/bin/* %{buildroot}%{_bindir}/
+install -m 0755 -vd                     %{buildroot}/etc/sysconfig
+install -m 0640 -vp %{name}             %{buildroot}/etc/sysconfig/
 install -m 0755 -vd                     %{buildroot}/usr/lib/systemd/system
-install -m 0644 -vp %{name}.service   %{buildroot}/usr/lib/systemd/system/
-install -m 0644 -vp %{name}.socket    %{buildroot}/usr/lib/systemd/system/
+install -m 0644 -vp %{name}.service     %{buildroot}/usr/lib/systemd/system/
+install -m 0644 -vp %{name}.socket      %{buildroot}/usr/lib/systemd/system/
 
 %if %{with check}
 %check
@@ -59,11 +61,15 @@ install -m 0644 -vp %{name}.socket    %{buildroot}/usr/lib/systemd/system/
 %license LICENSE
 %doc README.md
 %{_bindir}/*
+%config(noreplace) /etc/sysconfig/%{name}
 /usr/lib/systemd/system/%{name}.service
 /usr/lib/systemd/system/%{name}.socket
 
 %gopkgfiles
 
 %changelog
-* Wed Nov 04 11:37:15 CET 2020 Andrei Costescu <andrei@costescu.no> - v1.0-rc1-1
+* Mon Dec 07 2020 Andrei Costescu <andrei@costescu.no> - v1.0-rc2
+- Discord notifications
+- Use /etc/sysconfig for systemd env variables
+* Wed Nov 04 2020 Andrei Costescu <andrei@costescu.no> - v1.0-rc1
 - Initial package

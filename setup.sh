@@ -9,7 +9,7 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
 fi
 
 OPTIONS=h,v,n
-LONGOPTS=help,bin-path:,build-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:,no-watch,watch-interval:,verbose,dry-run,tmp-path:
+LONGOPTS=help,bin-path:,build-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:,sysconfig-path:,no-watch,watch-interval:,verbose,dry-run,tmp-path:
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -29,6 +29,7 @@ HOOK_PATH="/usr/share/libalpm/hooks"
 LISTEN_ADDRESS="/run/$PKG_NAME.sock"
 LOG_FILE="/var/log/${PKG_NAME}.log"
 SYSTEMD_PATH="/usr/lib/systemd/system"
+SYSCONFIG_PATH="/etc/sysconfig"
 WATCH_INTERVAL="10s"
 TMP_DIR="/tmp/build-$PKG_NAME"
 BUILD_DIR="./build"
@@ -66,6 +67,7 @@ Options:
       --no-watch        Disable package manager log file watching
       --pkg-name        Change package name (default $PKG_NAME)
       --systemd-path    Path where systemd units are installed (default $SYSTEMD_PATH)
+      --sysconfig-path  Path where env file is installed (default $SYSCONFIG_PATH)
       --tmp-path        Path where temporary build files are copied to (default $TMP_DIR)
       --watch-interval  Change watch interval (default $WATCH_INTERVAL)
 "
@@ -137,6 +139,10 @@ while true; do
             TMP_DIR="/tmp/build-$PKG_NAME"
             shift 2
             ;;
+        --sysconfig-path)
+            SYSCONFIG_PATH="$2"
+            shift 2
+            ;;
         --systemd-path)
             SYSTEMD_PATH="$2"
             shift 2
@@ -172,28 +178,31 @@ function generate_systemd {
     _nl=$'\n'
     systemd_env=""
     if [[ -n $CACHE_FILE ]]; then
-        systemd_env+="Environment=CACHE_FILE=\"$CACHE_FILE\"${_nl}"
+        systemd_env+="CACHE_FILE=\"$CACHE_FILE\"${_nl}"
     else
-        systemd_env+="Environment=NO_CACHE=1${_nl}"
+        systemd_env+="NO_CACHE=1${_nl}"
     fi
     if [[ -n $CACHE_INTERVAL ]]; then
-        systemd_env+="Environment=CACHE_INTERVAL=\"$CACHE_INTERVAL\"${_nl}"
+        systemd_env+="CACHE_INTERVAL=\"$CACHE_INTERVAL\"${_nl}"
     else
-        systemd_env+="Environment=NO_REFRESH=1${_nl}"
+        systemd_env+="NO_REFRESH=1${_nl}"
     fi
     if [[ -n $LOG_FILE ]]; then
-        systemd_env+="Environment=LOG_FILE=\"$LOG_FILE\"${_nl}"
+        systemd_env+="LOG_FILE=\"$LOG_FILE\"${_nl}"
     else
-        systemd_env+="Environment=NO_LOG_FILE=1${_nl}"
+        systemd_env+="NO_LOG_FILE=1${_nl}"
     fi
     if [[ -n $WATCH_INTERVAL ]]; then
-        systemd_env+="Environment=WATCH_ENABLE=1${_nl}"
-        systemd_env+="Environment=WATCH_INTERVAL=\"$WATCH_INTERVAL\"${_nl}"
+        systemd_env+="WATCH_ENABLE=1${_nl}"
+        systemd_env+="WATCH_INTERVAL=\"$WATCH_INTERVAL\"${_nl}"
     else
-        systemd_env+="Environment=WATCH_ENABLE=0${_nl}"
+        systemd_env+="WATCH_ENABLE=0${_nl}"
     fi
     tmp_sock="${TMP_DIR}/$PKG_NAME.socket"
     tmp_serv="${TMP_DIR}/$PKG_NAME.service"
+    tmp_env="${TMP_DIR}/$PKG_NAME.env"
+    env_file="${SYSCONFIG_PATH}/$PKG_NAME"
+    echo "$systemd_env" > "$tmp_env"
     cat <<EOF > "$tmp_sock"
 [Socket]
 ListenStream=$LISTEN_ADDRESS
@@ -209,19 +218,24 @@ After=network.target
 Requires=network.target
 
 [Service]
-$systemd_env
+EnvironmentFile=-$env_file
 ExecStart=$PKG_PATH --systemd
 EOF
+    # Don't overwrite existing file
+    [[ -f $env_file ]] && env_file+=".new"
     # Print if verbose
     if [[ $VERBOSE -eq 1 ]]; then
         echo -e "\n\t$PKG_NAME.socket"
         cat "$tmp_sock"
         echo -e "\n\t$PKG_NAME.service"
         cat "$tmp_serv"
+        echo -e "\n\t$env_file"
+        cat "$tmp_env"
     fi
     if [[ $DRY_RUN -ne 1 ]]; then
         install -m 0644 $verbose_arg "$tmp_sock" "${SYSTEMD_PATH}/"
         install -m 0644 $verbose_arg "$tmp_serv" "${SYSTEMD_PATH}/"
+        install -m 0640 $verbose_arg "$tmp_env" "${env_file}"
     fi
 }
 
@@ -266,7 +280,7 @@ EOF
 function build_binary {
     tmp_bin="${TMP_DIR}/$PKG_NAME"
     go build $verbose_arg -o "$tmp_bin"
-    [[ $DRY_RUN -ne 1 ]] && install -m 0755 $verbose_arg "$tmp_serv" "${BIN_PATH}/"
+    [[ $DRY_RUN -ne 1 ]] && install -m 0755 $verbose_arg "$tmp_bin" "${BIN_PATH}/"
 }
 
 function build_all_binaries {

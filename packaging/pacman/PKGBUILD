@@ -17,6 +17,7 @@ optdepends=('pikaur: AUR support' 'yay: AUR support' 'paru: AUR support')
 makedepends=("git" "go")
 source=("git+$url")
 md5sums=("SKIP")
+backup=("etc/sysconfig/${_pkgname}")
 install="${_pkgname}.install"
 
 pkgver() {
@@ -29,7 +30,8 @@ pkgver() {
 
 build() {
     cd "${_pkgname}"
-    _args="--pkg-name "${_pkgname}" --systemd-path ./ --hook-path ./ --tmp-path ./tmp --no-log --no-cache --no-watch"
+    mkdir -p "sysconfig"
+    _args="--pkg-name "${_pkgname}" --sysconfig-path ./sysconfig --systemd-path ./ --hook-path ./ --tmp-path ./tmp --no-log --no-cache --no-watch"
     ./setup.sh install systemd $_args
     ./setup.sh install hook $_args
     go mod vendor
@@ -38,9 +40,11 @@ build() {
 
 package() {
     cd "${_pkgname}"
+    install -d "${pkgdir}/etc/sysconfig"
     install -d "${pkgdir}/usr/lib/systemd/system"
     install -d "${pkgdir}/usr/share/libalpm/hooks"
     install -Dm 755 "${_pkgname}" "${pkgdir}/usr/bin/${_pkgname}"
+    install -m 640 "./sysconfig/${_pkgname}" "${pkgdir}/etc/sysconfig/"
     install -m 644 "${_pkgname}.service" "${pkgdir}/usr/lib/systemd/system/"
     install -m 644 "${_pkgname}.socket" "${pkgdir}/usr/lib/systemd/system/"
     install -m 644 "${_pkgname}.hook" "${pkgdir}/usr/share/libalpm/hooks/"
