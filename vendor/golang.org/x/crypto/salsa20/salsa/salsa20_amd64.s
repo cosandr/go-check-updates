@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build amd64,!appengine,!gccgo
+// +build amd64,!purego,gc
 
 // This code was translated into a form compatible with 6a from the public
 // domain sources in SUPERCOP: https://bench.cr.yp.to/supercop.html
@@ -99,30 +99,24 @@ TEXT ·salsa2020XORKeyStream(SB),0,$456-40 // frame = 424 + 32 byte alignment
 	MOVL  36 (SP),CX
 	MOVL DX,288(SP)
 	MOVL CX,304(SP)
-	ADDQ $1,DX
 	SHLQ $32,CX
 	ADDQ CX,DX
+	ADDQ $1,DX
 	MOVQ DX,CX
 	SHRQ $32,CX
 	MOVL DX, 292 (SP)
 	MOVL CX, 308 (SP)
 	ADDQ $1,DX
-	SHLQ $32,CX
-	ADDQ CX,DX
 	MOVQ DX,CX
 	SHRQ $32,CX
 	MOVL DX, 296 (SP)
 	MOVL CX, 312 (SP)
 	ADDQ $1,DX
-	SHLQ $32,CX
-	ADDQ CX,DX
 	MOVQ DX,CX
 	SHRQ $32,CX
 	MOVL DX, 300 (SP)
 	MOVL CX, 316 (SP)
 	ADDQ $1,DX
-	SHLQ $32,CX
-	ADDQ CX,DX
 	MOVQ DX,CX
 	SHRQ $32,CX
 	MOVL DX,16(SP)
