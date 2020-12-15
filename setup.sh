@@ -9,7 +9,7 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
 fi
 
 OPTIONS=h,v,n
-LONGOPTS=help,bin-path:,build-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:,sysconfig-path:,no-watch,watch-interval:,verbose,dry-run,tmp-path:
+LONGOPTS=help,bin-path:,build-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:,sysconfig-path:,no-watch,watch-interval:,verbose,dry-run,tmp-path:,keep-tmp
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -35,6 +35,7 @@ TMP_DIR="/tmp/build-$PKG_NAME"
 BUILD_DIR="./build"
 VERBOSE=0
 DRY_RUN=0
+KEEP_TMP=0
 _cwd=$(pwd -P)
 
 function print_help {
@@ -49,11 +50,13 @@ build                 Build subcommands, output $BUILD_DIR
 install               Install binary and systemd units
     hook              Install pacman hooks
     systemd           Install systemd socket and service files
+    env               Install sysconfig env file
 
 Options:
 -h    --help            Show this message
 -v    --verbose         Show generated files
 -n    --dry-run         Don't install files
+      --keep-tmp        Don't remove temporary files
       --bin-path        Path where the binary is installed (default $BIN_PATH)
       --build-path      Path where built stuff is copied to (default $BUILD_DIR)
       --cache-file      Change default cache file location (default $CACHE_FILE)
@@ -85,6 +88,10 @@ while true; do
             ;;
         -n|--dry-run)
             DRY_RUN=1
+            shift
+            ;;
+        --keep-tmp)
+            KEEP_TMP=1
             shift
             ;;
         --bin-path)
@@ -173,36 +180,12 @@ fi
 
 PKG_PATH="$BIN_PATH/$PKG_NAME"
 [[ $VERBOSE -eq 1 ]] && verbose_arg="-v" || verbose_arg=""
+tmp_sock="${TMP_DIR}/$PKG_NAME.socket"
+tmp_serv="${TMP_DIR}/$PKG_NAME.service"
+tmp_env="${TMP_DIR}/$PKG_NAME.env"
+env_file="${SYSCONFIG_PATH}/$PKG_NAME"
 
 function generate_systemd {
-    _nl=$'\n'
-    systemd_env=""
-    if [[ -n $CACHE_FILE ]]; then
-        systemd_env+="CACHE_FILE=\"$CACHE_FILE\"${_nl}"
-    else
-        systemd_env+="NO_CACHE=1${_nl}"
-    fi
-    if [[ -n $CACHE_INTERVAL ]]; then
-        systemd_env+="CACHE_INTERVAL=\"$CACHE_INTERVAL\"${_nl}"
-    else
-        systemd_env+="NO_REFRESH=1${_nl}"
-    fi
-    if [[ -n $LOG_FILE ]]; then
-        systemd_env+="LOG_FILE=\"$LOG_FILE\"${_nl}"
-    else
-        systemd_env+="NO_LOG_FILE=1${_nl}"
-    fi
-    if [[ -n $WATCH_INTERVAL ]]; then
-        systemd_env+="WATCH_ENABLE=1${_nl}"
-        systemd_env+="WATCH_INTERVAL=\"$WATCH_INTERVAL\"${_nl}"
-    else
-        systemd_env+="WATCH_ENABLE=0${_nl}"
-    fi
-    tmp_sock="${TMP_DIR}/$PKG_NAME.socket"
-    tmp_serv="${TMP_DIR}/$PKG_NAME.service"
-    tmp_env="${TMP_DIR}/$PKG_NAME.env"
-    env_file="${SYSCONFIG_PATH}/$PKG_NAME"
-    echo "$systemd_env" > "$tmp_env"
     cat <<EOF > "$tmp_sock"
 [Socket]
 ListenStream=$LISTEN_ADDRESS
@@ -221,21 +204,44 @@ Requires=network.target
 EnvironmentFile=-$env_file
 ExecStart=$PKG_PATH --systemd
 EOF
-    # Don't overwrite existing file
-    [[ -f $env_file ]] && env_file+=".new"
     # Print if verbose
     if [[ $VERBOSE -eq 1 ]]; then
         echo -e "\n\t$PKG_NAME.socket"
         cat "$tmp_sock"
         echo -e "\n\t$PKG_NAME.service"
         cat "$tmp_serv"
+    fi
+}
+
+function generate_env {
+    _nl=$'\n'
+    env_content=""
+    if [[ -n $CACHE_FILE ]]; then
+        env_content+="CACHE_FILE=\"$CACHE_FILE\"${_nl}"
+    else
+        env_content+="NO_CACHE=1${_nl}"
+    fi
+    if [[ -n $CACHE_INTERVAL ]]; then
+        env_content+="CACHE_INTERVAL=\"$CACHE_INTERVAL\"${_nl}"
+    else
+        env_content+="NO_REFRESH=1${_nl}"
+    fi
+    if [[ -n $LOG_FILE ]]; then
+        env_content+="LOG_FILE=\"$LOG_FILE\"${_nl}"
+    else
+        env_content+="NO_LOG_FILE=1${_nl}"
+    fi
+    if [[ -n $WATCH_INTERVAL ]]; then
+        env_content+="WATCH_ENABLE=1${_nl}"
+        env_content+="WATCH_INTERVAL=\"$WATCH_INTERVAL\"${_nl}"
+    else
+        env_content+="WATCH_ENABLE=0${_nl}"
+    fi
+    echo "$env_content" > "$tmp_env"
+    # Print if verbose
+    if [[ $VERBOSE -eq 1 ]]; then
         echo -e "\n\t$env_file"
         cat "$tmp_env"
-    fi
-    if [[ $DRY_RUN -ne 1 ]]; then
-        install -m 0644 $verbose_arg "$tmp_sock" "${SYSTEMD_PATH}/"
-        install -m 0644 $verbose_arg "$tmp_serv" "${SYSTEMD_PATH}/"
-        install -m 0640 $verbose_arg "$tmp_env" "${env_file}"
     fi
 }
 
@@ -274,7 +280,6 @@ EOF
         echo -e "\n\t$PKG_NAME.hook"
         cat "$tmp_hook"
     fi
-    [[ $DRY_RUN -ne 1 ]] && install -m 0644 $verbose_arg "$tmp_hook" "${HOOK_PATH}/"
 }
 
 function build_binary {
@@ -357,11 +362,13 @@ function build_rpm {
 }
 
 # Cleanup before doing anything
-rm -rf "$TMP_DIR" 2>/dev/null
+[[ $KEEP_TMP -eq 0 ]] && rm -rf "$TMP_DIR" 2>/dev/null
 mkdir -p "$TMP_DIR"
 
 function cleanup {
-    [[ -d "$TMP_DIR" ]] && rm -rf "$TMP_DIR"
+    _ex=$?
+    [[ $KEEP_TMP -eq 0 ]] && [[ -d "$TMP_DIR" ]] && rm -rf "$TMP_DIR"
+    exit $_ex
 }
 
 trap cleanup EXIT
@@ -398,9 +405,20 @@ case "$1" in
         case "$2" in
             hook)
                 generate_hook
+                [[ $DRY_RUN -ne 1 ]] && install -m 0644 $verbose_arg "$tmp_hook" "${HOOK_PATH}/"
                 ;;
             systemd)
                 generate_systemd
+                if [[ $DRY_RUN -ne 1 ]]; then
+                    install -m 0644 $verbose_arg "$tmp_sock" "${SYSTEMD_PATH}/"
+                    install -m 0644 $verbose_arg "$tmp_serv" "${SYSTEMD_PATH}/"
+                fi
+                ;;
+            env)
+                generate_env
+                # Don't overwrite existing file
+                [[ -f $env_file ]] && _file+=".new" || _file="$env_file"
+                [[ $DRY_RUN -ne 1 ]] && install -m 0640 $verbose_arg "$tmp_env" "${_file}"
                 ;;
             *)
                 echo "Unrecognized $1 subcommand: $2"
@@ -415,3 +433,5 @@ case "$1" in
         exit 2
         ;;
 esac
+
+exit 0

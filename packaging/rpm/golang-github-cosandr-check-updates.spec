@@ -40,17 +40,18 @@ Source0:        %{gosource}
 %build
 go mod vendor
 %gobuild -o %{gobuilddir}/bin/%{name} %{goipath}
-./setup.sh install systemd --pkg-name %{name} --sysconfig-path ./ --systemd-path ./ --tmp-path ./tmp --no-log --no-cache
+./setup.sh install systemd -n --pkg-name %{name} --tmp-path ./tmp --keep-tmp --no-log --no-cache
+./setup.sh install env -n --pkg-name %{name} --tmp-path ./tmp --keep-tmp --no-log --no-cache
 
 %install
 %gopkginstall
-install -m 0755 -vd                     %{buildroot}%{_bindir}
-install -m 0755 -vp %{gobuilddir}/bin/* %{buildroot}%{_bindir}/
-install -m 0755 -vd                     %{buildroot}/etc/sysconfig
-install -m 0640 -vp %{name}             %{buildroot}/etc/sysconfig/
-install -m 0755 -vd                     %{buildroot}/usr/lib/systemd/system
-install -m 0644 -vp %{name}.service     %{buildroot}/usr/lib/systemd/system/
-install -m 0644 -vp %{name}.socket      %{buildroot}/usr/lib/systemd/system/
+install -m 0755 -vd                        %{buildroot}%{_bindir}
+install -m 0755 -vp %{gobuilddir}/bin/*    %{buildroot}%{_bindir}/
+install -m 0755 -vd                        %{buildroot}/etc/sysconfig
+install -m 0640 -vp ./tmp/%{name}.env      %{buildroot}/etc/sysconfig/%{name}
+install -m 0755 -vd                        %{buildroot}/usr/lib/systemd/system
+install -m 0644 -vp ./tmp/%{name}.service  %{buildroot}/usr/lib/systemd/system/
+install -m 0644 -vp ./tmp/%{name}.socket   %{buildroot}/usr/lib/systemd/system/
 
 %if %{with check}
 %check

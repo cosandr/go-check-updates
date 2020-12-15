@@ -30,9 +30,9 @@ pkgver() {
 
 build() {
     cd "${_pkgname}"
-    mkdir -p "sysconfig"
-    _args="--pkg-name "${_pkgname}" --sysconfig-path ./sysconfig --systemd-path ./ --hook-path ./ --tmp-path ./tmp --no-log --no-cache --no-watch"
+    _args="-n --pkg-name "${_pkgname}" --tmp-path ./tmp --keep-tmp --no-log --no-cache --no-watch"
     ./setup.sh install systemd $_args
+    ./setup.sh install env $_args
     ./setup.sh install hook $_args
     go mod vendor
     go build -o "${_pkgname}"
@@ -44,9 +44,9 @@ package() {
     install -d "${pkgdir}/usr/lib/systemd/system"
     install -d "${pkgdir}/usr/share/libalpm/hooks"
     install -Dm 755 "${_pkgname}" "${pkgdir}/usr/bin/${_pkgname}"
-    install -m 640 "./sysconfig/${_pkgname}" "${pkgdir}/etc/sysconfig/"
-    install -m 644 "${_pkgname}.service" "${pkgdir}/usr/lib/systemd/system/"
-    install -m 644 "${_pkgname}.socket" "${pkgdir}/usr/lib/systemd/system/"
-    install -m 644 "${_pkgname}.hook" "${pkgdir}/usr/share/libalpm/hooks/"
+    install -m 640 "./tmp/${_pkgname}.env" "${pkgdir}/etc/sysconfig/"
+    install -m 644 "./tmp/${_pkgname}.service" "${pkgdir}/usr/lib/systemd/system/"
+    install -m 644 "./tmp/${_pkgname}.socket" "${pkgdir}/usr/lib/systemd/system/"
+    install -m 644 "./tmp/${_pkgname}.hook" "${pkgdir}/usr/share/libalpm/hooks/"
     install -Dm 644 LICENSE "${pkgdir}/usr/share/licenses/${_pkgname}/LICENSE"
 }
