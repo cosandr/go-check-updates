@@ -19,8 +19,7 @@ func (f File) IsEmpty() bool {
 // Copy returns a deep copy of this struct
 func (f File) Copy() File {
 	cp := File{Checked: f.Checked}
-	cp.Updates = make(UpdatesList, len(f.Updates))
-	copy(cp.Updates, f.Updates)
+	cp.Updates = f.Updates.Copy()
 	return cp
 }
 
@@ -67,7 +66,7 @@ func (f *File) String() string {
 	return ret
 }
 
-// UpdatesList is a list of Update with a Contains method
+// UpdatesList is a list of Update with extra methods
 type UpdatesList []Update
 
 // Contains returns true if list contains other
@@ -78,6 +77,13 @@ func (u *UpdatesList) Contains(other Update) bool {
 		}
 	}
 	return false
+}
+
+// Copy returns a deep copy of this list
+func (u *UpdatesList) Copy() UpdatesList {
+	ret := make(UpdatesList, len(*u))
+	copy(ret, *u)
+	return ret
 }
 
 // Update is the struct for pending updates
