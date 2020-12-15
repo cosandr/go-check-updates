@@ -58,7 +58,7 @@ func runYum(name string) (retStr string, err error) {
 }
 
 // UpdateDnf uses dnf or yum to get available updates
-func UpdateDnf() ([]api.Update, error) {
+func UpdateDnf() (api.UpdatesList, error) {
 	rawOut, err := runYum("dnf")
 	// Try yum instead
 	if err != nil {
@@ -66,13 +66,13 @@ func UpdateDnf() ([]api.Update, error) {
 	}
 	// Both failed
 	if err != nil {
-		return []api.Update{}, err
+		return api.UpdatesList{}, err
 	}
 	return parseYumCheckUpdate(rawOut), nil
 }
 
-func parseYumCheckUpdate(out string) []api.Update {
-	updates := make([]api.Update, 0)
+func parseYumCheckUpdate(out string) api.UpdatesList {
+	updates := make(api.UpdatesList, 0)
 	if i := strings.Index(out, "Obsoleting Packages"); i > 0 {
 		out = out[:i]
 	}

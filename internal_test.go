@@ -23,7 +23,7 @@ func TestWatchLogs(t *testing.T) {
 		}
 		return nil
 	}
-	allUpdates := []api.Update{
+	allUpdates := api.UpdatesList{
 		{
 			Pkg:    "shellcheck",
 			NewVer: "0.7.1-33",

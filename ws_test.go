@@ -47,7 +47,7 @@ func TestWS(t *testing.T) {
 		select {
 		case <-ticker.C:
 			// Generate some updates
-			var updates []api.Update
+			var updates api.UpdatesList
 			for j := 0; j < rand.Intn(100); j++ {
 				updates = append(updates, api.Update{
 					Pkg:    fmt.Sprintf("Iter %d package %d", i, j),

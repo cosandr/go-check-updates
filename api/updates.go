@@ -7,8 +7,8 @@ import (
 
 // File is the struct for the json file
 type File struct {
-	Checked string   `json:"checked"`
-	Updates []Update `json:"updates"`
+	Checked string      `json:"checked"`
+	Updates UpdatesList `json:"updates"`
 }
 
 // IsEmpty returns True if File is empty
@@ -19,7 +19,7 @@ func (f File) IsEmpty() bool {
 // Copy returns a deep copy of this struct
 func (f File) Copy() File {
 	cp := File{Checked: f.Checked}
-	cp.Updates = make([]Update, len(f.Updates))
+	cp.Updates = make(UpdatesList, len(f.Updates))
 	copy(cp.Updates, f.Updates)
 	return cp
 }
@@ -27,7 +27,7 @@ func (f File) Copy() File {
 // Remove removes update from internal list if name matches
 // If newVer isn't an empty string, only remove if that matches as well
 func (f *File) Remove(name string, newVer string) bool {
-	updates := make([]Update, 0)
+	updates := make(UpdatesList, 0)
 	for _, u := range f.Updates {
 		if u.Pkg != name || (newVer != "" && u.NewVer != newVer) {
 			updates = append(updates, u)
@@ -41,7 +41,7 @@ func (f *File) Remove(name string, newVer string) bool {
 // RemoveContains removes update from internal list if `check` contains `u.Pkg`
 // If newVer is true, also check if that is present
 func (f *File) RemoveContains(check string, newVer bool) bool {
-	updates := make([]Update, 0)
+	updates := make(UpdatesList, 0)
 	for _, u := range f.Updates {
 		if !strings.Contains(check, u.Pkg) || (newVer && !strings.Contains(check, u.NewVer)) {
 			updates = append(updates, u)
@@ -67,10 +67,29 @@ func (f *File) String() string {
 	return ret
 }
 
+// UpdatesList is a list of Update with a Contains method
+type UpdatesList []Update
+
+// Contains returns true if list contains other
+func (u *UpdatesList) Contains(other Update) bool {
+	for _, ref := range *u {
+		if other.Equals(&ref) {
+			return true
+		}
+	}
+	return false
+}
+
 // Update is the struct for pending updates
 type Update struct {
 	Pkg    string `json:"pkg"`
 	OldVer string `json:"oldVer,omitempty"`
 	NewVer string `json:"newVer"`
 	Repo   string `json:"repo,omitempty"`
+}
+
+// Equals returns true if other update is equal to self
+func (u *Update) Equals(other *Update) bool {
+	return u.NewVer == other.NewVer && u.OldVer == other.OldVer &&
+		u.Pkg == other.Pkg && u.Repo == other.Repo
 }

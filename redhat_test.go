@@ -30,7 +30,7 @@ samba.x86_64                                                              2:4.13
 samba-common.noarch                                                       2:4.13.1-0.fc33                                        updates
 `
 	actual := parseYumCheckUpdate(out)
-	expected := []api.Update{
+	expected := api.UpdatesList{
 		{
 			Pkg:    "efivar-libs",
 			NewVer: "37-14.fc33",
@@ -128,7 +128,7 @@ kernel-headers.x86_64                                                5.8.18-300.
     kernel-headers.x86_64                                            5.8.11-300.fc33                                             @fedora
 `
 	actual = parseYumCheckUpdate(out)
-	expected = []api.Update{
+	expected = api.UpdatesList{
 		{
 			Pkg:    "kernel-core",
 			NewVer: "5.8.18-300.fc33",
@@ -177,7 +177,7 @@ func TestRedHatDnfLogs(t *testing.T) {
 2020-07-12T11:14:13Z SUBDEBUG Upgrade: x264-libs-0.159-10.20200409git296494a.fc32.x86_64
 2020-07-12T11:14:13Z SUBDEBUG Upgrade: grafana-7.0.6-1.x86_64
 `
-	allUpdates := []api.Update{
+	allUpdates := api.UpdatesList{
 		{
 			Pkg:    "selinux-policy-devel",
 			NewVer: "3.14.5-42",
@@ -230,7 +230,7 @@ func TestRedHatDnfLogs(t *testing.T) {
 2020-11-01T12:10:42+0100 SUBDEBUG Upgrade: grafana-7.3.1-1.x86_64
 2020-11-01T12:10:46+0100 SUBDEBUG Upgrade: perl-Digest-1.19-1.fc32.noarch
 `
-	cache.f.Updates = []api.Update{
+	cache.f.Updates = api.UpdatesList{
 		{
 			Pkg:    "xen-libs",
 			NewVer: "4.13.1-7",

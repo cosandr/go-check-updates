@@ -13,8 +13,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func generateUpdates(num int) []api.Update {
-	updates := make([]api.Update, 0)
+func generateUpdates(num int) api.UpdatesList {
+	updates := make(api.UpdatesList, 0)
 	for i := 1; i < num+1; i++ {
 		old := rand.Intn(10) + 1
 		updates = append(updates, api.Update{

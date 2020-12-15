@@ -35,7 +35,7 @@ type helper struct {
 }
 
 type updRes struct {
-	upd []api.Update
+	upd api.UpdatesList
 	err error
 }
 
@@ -121,7 +121,7 @@ func procAUR(ch chan<- updRes) {
 }
 
 // UpdateArch uses checkupdates and (if available) a supported AUR helper to get available updates
-func UpdateArch() (updates []api.Update, err error) {
+func UpdateArch() (updates api.UpdatesList, err error) {
 	chPac := make(chan updRes)
 	chAUR := make(chan updRes)
 	// Run in parallel
@@ -147,8 +147,8 @@ func UpdateArch() (updates []api.Update, err error) {
 	return
 }
 
-func parsePacmanCheckUpdates(out string, re *regexp.Regexp, repo string) []api.Update {
-	updates := make([]api.Update, 0)
+func parsePacmanCheckUpdates(out string, re *regexp.Regexp, repo string) api.UpdatesList {
+	updates := make(api.UpdatesList, 0)
 	for _, m := range re.FindAllStringSubmatch(out, -1) {
 		updates = append(updates, api.Update{
 			Pkg:    m[1],

@@ -86,7 +86,7 @@ type InternalCache struct {
 	fp         string
 	logFp      string
 	logFunc    func(string) error
-	updateFunc func() (updates []api.Update, err error)
+	updateFunc func() (updates api.UpdatesList, err error)
 	ws         *WsFeed
 }
 

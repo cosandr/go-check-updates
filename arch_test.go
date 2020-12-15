@@ -25,7 +25,7 @@ shellcheck 0.7.1-167 -> 0.7.1-168
 vulkan-icd-loader 1.2.153-2 -> 1.2.158-1
 `
 	actual := parsePacmanCheckUpdates(out, rePacman, "pacman")
-	expected := []api.Update{
+	expected := api.UpdatesList{
 		{
 			Pkg:    "cuda",
 			OldVer: "11.1.0-2",
@@ -124,7 +124,7 @@ func TestArchPacmanLogs(t *testing.T) {
 [2020-05-29T23:47:18+0200] [ALPM] upgraded vte-common (0.60.2-2 -> 0.60.3-1)
 [2020-05-29T23:47:18+0200] [ALPM] upgraded vte3 (0.60.2-2 -> 0.60.3-1)
 `
-	allUpdates := []api.Update{
+	allUpdates := api.UpdatesList{
 		{
 			Pkg:    "shellcheck",
 			NewVer: "0.7.1-33",
