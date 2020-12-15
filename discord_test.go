@@ -27,10 +27,110 @@ func generateUpdates(num int) api.UpdatesList {
 	return updates
 }
 
+func TestDiscordDiffUpdates(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	old := api.UpdatesList{
+		{
+			Pkg:    "pkg1",
+			NewVer: "v1",
+			Repo:   "updates",
+		},
+		{
+			Pkg:    "pkg2",
+			NewVer: "v2",
+			Repo:   "updates",
+		},
+	}
+	// Test with same updates
+	new := make(api.UpdatesList, len(old))
+	copy(new, old)
+	actual := diffUpdates(&old, &new)
+	if len(actual) != 0 {
+		t.Errorf("Expected 0 updates, got %v", actual)
+	}
+	// Add an update
+	add := api.Update{
+		Pkg:    "pkg3",
+		NewVer: "v3",
+		Repo:   "updates",
+	}
+	new = append(new, add)
+	actual = diffUpdates(&old, &new)
+	if len(actual) != 1 && !actual[0].Equals(&add) {
+		t.Errorf("Expected %v, got %v", add, actual)
+	}
+	// Remove an update
+	new = api.UpdatesList{
+		{
+			Pkg:    "pkg1",
+			NewVer: "v1",
+			Repo:   "updates",
+		},
+	}
+	actual = diffUpdates(&old, &new)
+	if len(actual) != 0 {
+		t.Errorf("Expected 0 updates, got %v", actual)
+	}
+}
+
+func TestDiscordSendUpdatesNotificationDiff(t *testing.T) {
+	log.SetLevel(log.DebugLevel)
+	args.WebhookURL = os.Getenv("WEBHOOK_URL")
+	args.NotifyFormat = os.Getenv("NOTIFY_FORMAT")
+	args.NotifyDelta = true
+	if args.NotifyFormat == "" {
+		args.NotifyFormat = "2006/01/02 15:04"
+	}
+	cache = NewInternalCache()
+	cache.f.Checked = time.Now().Format(time.RFC3339)
+	cache.f.Updates = api.UpdatesList{
+		{
+			Pkg:    "pkg1",
+			NewVer: "v1",
+			Repo:   "updates",
+		},
+		{
+			Pkg:    "pkg2",
+			NewVer: "v2",
+			Repo:   "updates",
+		},
+	}
+	// Test with same updates
+	prevNotifyUpdates = make(api.UpdatesList, len(cache.f.Updates))
+	copy(prevNotifyUpdates, cache.f.Updates)
+	if err := sendUpdatesNotification(); err != nil {
+		t.Error(err)
+		return
+	}
+	// Add an update
+	cache.f.Updates = append(cache.f.Updates, api.Update{
+		Pkg:    "pkg3",
+		NewVer: "v3",
+		Repo:   "updates",
+	})
+	if err := sendUpdatesNotification(); err != nil {
+		t.Error(err)
+		return
+	}
+	// Remove an update
+	cache.f.Updates = api.UpdatesList{
+		{
+			Pkg:    "pkg1",
+			NewVer: "v1",
+			Repo:   "updates",
+		},
+	}
+	if err := sendUpdatesNotification(); err != nil {
+		t.Error(err)
+		return
+	}
+}
+
 func TestDiscordSendUpdatesNotification(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	args.WebhookURL = os.Getenv("WEBHOOK_URL")
 	args.NotifyFormat = os.Getenv("NOTIFY_FORMAT")
+	args.NotifyDelta = false
 	if args.NotifyFormat == "" {
 		args.NotifyFormat = "2006/01/02 15:04"
 	}

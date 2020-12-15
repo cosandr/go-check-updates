@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/cosandr/go-check-updates/api"
 	log "github.com/sirupsen/logrus"
 )
 
-// TODO: Real-time updates using cache.Subscribe
+var prevNotifyUpdates api.UpdatesList
 
 // https://discord.com/developers/docs/resources/channel#embed-limits
 const (
@@ -29,6 +30,18 @@ const (
 	embedMaxTotal       = 6000
 	webhookMaxEmbeds    = 10
 )
+
+// diffUpdates returns a list of updates present in new but not in old
+func diffUpdates(old *api.UpdatesList, new *api.UpdatesList) api.UpdatesList {
+	diff := make(api.UpdatesList, 0)
+	// Updates which are in new but not in old
+	for _, u := range *new {
+		if !old.Contains(u) {
+			diff = append(diff, u)
+		}
+	}
+	return diff
+}
 
 // embedExceedsLimits returns true if embed total character count is too large
 func embedExceedsLimits(embed *discordgo.MessageEmbed) bool {
@@ -85,10 +98,24 @@ func sendUpdatesNotification() error {
 	if err != nil {
 		return err
 	}
-	num := len(cache.f.Updates)
 	embed := discordgo.MessageEmbed{
-		Title: fmt.Sprintf("%d pending updates for %s", num, hostname),
+		Title: fmt.Sprintf("%s: %d pending updates", hostname, len(cache.f.Updates)),
 	}
+	added := diffUpdates(&prevNotifyUpdates, &cache.f.Updates)
+	if len(added) > 0 {
+		embed.Title += fmt.Sprintf(", %d added", len(added))
+	}
+	removed := diffUpdates(&cache.f.Updates, &prevNotifyUpdates)
+	if len(removed) > 0 {
+		embed.Title += fmt.Sprintf(", %d removed", len(removed))
+	}
+	var checkList api.UpdatesList
+	if args.NotifyDelta {
+		checkList = added
+	} else {
+		checkList = cache.f.Updates
+	}
+	num := len(checkList)
 	if t, err := time.Parse(time.RFC3339, cache.f.Checked); err == nil {
 		embed.Footer = &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf("Checked %s", t.Format(args.NotifyFormat)),
@@ -97,12 +124,12 @@ func sendUpdatesNotification() error {
 	if num <= embedMaxFields {
 		log.Debug("adding updates to embed fields")
 		embed.Fields = make([]*discordgo.MessageEmbedField, num)
-		for i, u := range cache.f.Updates {
+		for i, u := range checkList {
 			field := discordgo.MessageEmbedField{Name: u.Pkg, Inline: true}
 			if u.OldVer != "" {
 				field.Value = fmt.Sprintf("%s -> %s", u.OldVer, u.NewVer)
 			} else {
-				field.Value += fmt.Sprintf("New version %s", u.NewVer)
+				field.Value += u.NewVer
 			}
 			embed.Fields[i] = &field
 		}
@@ -113,7 +140,7 @@ func sendUpdatesNotification() error {
 		// Reset fields
 		embed.Fields = make([]*discordgo.MessageEmbedField, 0)
 		// Write to description
-		for _, u := range cache.f.Updates {
+		for _, u := range checkList {
 			embed.Description += "\n" + u.Pkg
 			if u.OldVer != "" {
 				embed.Description += fmt.Sprintf(" [%s -> %s]", u.OldVer, u.NewVer)
@@ -127,7 +154,7 @@ func sendUpdatesNotification() error {
 	if len(embed.Fields) == 0 && embedExceedsLimits(&embed) {
 		log.Debug("embed description too long, trying names only")
 		tmp := make([]string, num)
-		for i, u := range cache.f.Updates {
+		for i, u := range checkList {
 			tmp[i] = u.Pkg
 		}
 		embed.Description = strings.Join(tmp, ", ")

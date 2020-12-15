@@ -10,6 +10,7 @@ import (
 
 	"github.com/alexflint/go-arg"
 	"github.com/coreos/go-systemd/v22/activation"
+	"github.com/cosandr/go-check-updates/api"
 	log "github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/writer"
 )
@@ -35,6 +36,7 @@ var args struct {
 	NoLogFile      bool          `arg:"--no-log,env:NO_LOG_FILE" help:"Don't log to file"`
 	NoRefresh      bool          `arg:"--no-refresh,env:NO_REFRESH" help:"Don't auto-refresh"`
 	Notify         bool          `arg:"--notify.enable,env:NOTIFY_ENABLE" help:"Enable notifications, webhook URL is required"`
+	NotifyDelta    bool          `arg:"--notify.delta,env:NOTIFY_DELTA" help:"Only send differences in notifications"`
 	NotifyInterval time.Duration `arg:"--notify.interval,env:NOTIFY_INTERVAL" help:"Minimum time between notifications"`
 	NotifyFormat   string        `arg:"--notify.format,env:NOTIFY_FORMAT" help:"Time format for embed footer" default:"2006/01/02 15:04"`
 	Quiet          bool          `arg:"-q,--quiet" help:"Don't log to console"`
@@ -196,13 +198,14 @@ func setupNotify() {
 	go func() {
 		sub := cache.ws.Subscribe()
 		defer sub.Unsubscribe()
-		prevUpdates := 0
+		prevNotifyUpdates = make(api.UpdatesList, 0)
 		var prevNotify time.Time
 		for {
 			select {
 			case <-sub.ch:
 				log.Debug("notify received broadcast")
 				curUpdates := len(cache.f.Updates)
+				prevUpdates := len(prevNotifyUpdates)
 				if curUpdates == prevUpdates || time.Since(prevNotify) < args.NotifyInterval {
 					continue
 				}
@@ -210,7 +213,7 @@ func setupNotify() {
 				if err := sendUpdatesNotification(); err != nil {
 					log.Warnf("failed to send notification: %v", err)
 				}
-				prevUpdates = curUpdates
+				prevNotifyUpdates = cache.f.Updates.Copy()
 				prevNotify = time.Now()
 			}
 		}

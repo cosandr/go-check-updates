@@ -159,3 +159,5 @@ Example usage in my [Polybar setup](https://github.com/cosandr/dotfiles/blob/mas
 Edit `/etc/sysconfig/go-check-updates` and add `NOTIFY_ENABLE=1` and `WEBHOOK_URL="<url>"`.
 By default notifications are only sent every hour at most (to prevent spam when upgrading packages),
 this can be adjusted with the `NOTIFY_INTERVAL` env variable.
+
+Enabling delta notifications `NOTIFY_DELTA` or `--notify.delta` will only send updates which were not present in the last notification, this is particularly useful when a large number of updates are pending.
