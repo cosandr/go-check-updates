@@ -23,7 +23,7 @@ func getDistro() (distro string, err error) {
 
 	scanner := bufio.NewScanner(file)
 	// Look for pretty name
-	re := regexp.MustCompile(`ID=(.*)`)
+	re := regexp.MustCompile(`ID="?([^"\s]+)"?`)
 	for scanner.Scan() {
 		m := re.FindSubmatch(scanner.Bytes())
 		if len(m) > 1 {

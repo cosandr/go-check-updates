@@ -108,7 +108,7 @@ func setupDistro() {
 		log.Fatalln(err)
 	}
 	switch distro {
-	case "fedora", "centos", "rhel":
+	case "fedora", "centos", "rhel", "ol":
 		cache.updateFunc = UpdateDnf
 		cache.logFp = "/var/log/dnf.rpm.log"
 		cache.logFunc = checkDnfLogs
