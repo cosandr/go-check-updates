@@ -9,7 +9,7 @@ if [[ ${PIPESTATUS[0]} -ne 4 ]]; then
 fi
 
 OPTIONS=h,v,n
-LONGOPTS=help,bin-path:,build-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,pkg-name:,systemd-path:,sysconfig-path:,no-watch,watch-interval:,verbose,dry-run,tmp-path:,keep-tmp
+LONGOPTS=help,bin-path:,build-path:,cache-file:,cache-interval:,hook-path:,listen-address:,log-file:,no-cache,no-log,no-refresh,no-source,pkg-name:,systemd-path:,sysconfig-path:,no-watch,watch-interval:,verbose,dry-run,tmp-path:,keep-tmp
 
 ! PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTS --name "$0" -- "$@")
 if [[ ${PIPESTATUS[0]} -ne 0 ]]; then
@@ -33,6 +33,7 @@ SYSCONFIG_PATH="/etc/sysconfig"
 WATCH_INTERVAL="10s"
 TMP_DIR="/tmp/build-$PKG_NAME"
 BUILD_DIR="./build"
+NO_SOURCE=0
 VERBOSE=0
 DRY_RUN=0
 KEEP_TMP=0
@@ -67,6 +68,7 @@ Options:
       --no-cache        Disable cache file
       --no-log          Disable log file
       --no-refresh      Disable auto-refresh
+      --no-source       Ignore source packages (RedHat)
       --no-watch        Disable package manager log file watching
       --pkg-name        Change package name (default $PKG_NAME)
       --systemd-path    Path where systemd units are installed (default $SYSTEMD_PATH)
@@ -132,6 +134,10 @@ while true; do
             ;;
         --no-refresh)
             CACHE_INTERVAL=""
+            shift
+            ;;
+        --no-source)
+            NO_SOURCE=1
             shift
             ;;
         --no-watch)
@@ -237,6 +243,7 @@ function generate_env {
     else
         env_content+="WATCH_ENABLE=0${_nl}"
     fi
+    [[ $NO_SOURCE -eq 1 ]] && env_content+="NO_SOURCE=1${_nl}"
     echo "$env_content" > "$tmp_env"
     # Print if verbose
     if [[ $VERBOSE -eq 1 ]]; then

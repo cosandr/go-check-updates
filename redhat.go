@@ -31,10 +31,11 @@ import (
 const dnfTimeFmt = "2006-01-02T15:04:05-0700"
 const oldDnfTimeFmt = "2006-01-02T15:04:05Z0700"
 
-// Group 1: name (without arch)
-// Group 2: version
-// Group 3: repo
-var reYum = regexp.MustCompile(`(?m)^\s*(\S+)(?:\.\S+)\s+(\S+)\s+(\S+)\s*$`)
+// Group 1: name
+// Group 2: arch
+// Group 3: version
+// Group 4: repo
+var reYum = regexp.MustCompile(`(?m)^\s*(\S+)(\.\S+)\s+(\S+)\s+(\S+)\s*$`)
 
 // Group 1: timestamp
 // Group 2: action (Installed, Upgrade, Upgraded, Erase)
@@ -77,10 +78,13 @@ func parseYumCheckUpdate(out string) api.UpdatesList {
 		out = out[:i]
 	}
 	for _, m := range reYum.FindAllStringSubmatch(out, -1) {
+		if args.NoSource && m[2] == ".src" {
+			continue
+		}
 		updates = append(updates, api.Update{
 			Pkg:    m[1],
-			NewVer: m[2],
-			Repo:   m[3],
+			NewVer: m[3],
+			Repo:   m[4],
 		})
 	}
 	return updates

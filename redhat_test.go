@@ -10,6 +10,24 @@ import (
 	"github.com/cosandr/go-check-updates/api"
 )
 
+func checkRedHatParse(t *testing.T, expected api.UpdatesList, actual api.UpdatesList) {
+	if len(actual) != len(expected) {
+		t.Fatalf("expected %d updates, got %d", len(expected), len(actual))
+	}
+	for i, a := range actual {
+		e := expected[i]
+		if a.Pkg != e.Pkg {
+			t.Errorf("expected name %s, got %s", e.Pkg, a.Pkg)
+		}
+		if a.NewVer != e.NewVer {
+			t.Errorf("expected version %s, got %s", e.NewVer, a.NewVer)
+		}
+		if a.Repo != e.Repo {
+			t.Errorf("expected repo %s, got %s", e.Repo, a.Repo)
+		}
+	}
+}
+
 func TestRedHatParseYumCheckUpdate(t *testing.T) {
 	log.SetLevel(log.DebugLevel)
 	cache = NewInternalCache()
@@ -102,21 +120,7 @@ samba-common.noarch                                                       2:4.13
 			Repo:   "updates",
 		},
 	}
-	if len(actual) != len(expected) {
-		t.Errorf("expected %d updates, got %d", len(expected), len(actual))
-	}
-	for i, a := range actual {
-		e := expected[i]
-		if a.Pkg != e.Pkg {
-			t.Errorf("expected name %s, got %s", e.Pkg, a.Pkg)
-		}
-		if a.NewVer != e.NewVer {
-			t.Errorf("expected version %s, got %s", e.NewVer, a.NewVer)
-		}
-		if a.Repo != e.Repo {
-			t.Errorf("expected repo %s, got %s", e.Repo, a.Repo)
-		}
-	}
+	checkRedHatParse(t, expected, actual)
 	// Test when Obsoleting Packages is present
 	out = `
 kernel-core.x86_64                                                   5.8.18-300.fc33                                             updates
@@ -150,21 +154,55 @@ kernel-headers.x86_64                                                5.8.18-300.
 			Repo:   "updates",
 		},
 	}
-	if len(actual) != len(expected) {
-		t.Fatalf("expected %d updates, got %d", len(expected), len(actual))
+	checkRedHatParse(t, expected, actual)
+	// Test ignoring source packages
+	out = `
+samba.x86_64                                                              2:4.13.1-0.fc33                                        updates
+samba-common.noarch                                                       2:4.13.1-0.fc33                                        updates
+perl-Perl-OSType.src                                   1.010-397.module+el8.3.0+7729+86a74f64                              ol8_appstream
+perl-PerlIO-via-QuotedPrint.src                        0.08-396.module+el8.3.0+7729+86a74f64                               ol8_appstream
+`
+	args.NoSource = true
+	actual = parseYumCheckUpdate(out)
+	expected = api.UpdatesList{
+		{
+			Pkg:    "samba",
+			NewVer: "2:4.13.1-0.fc33",
+			Repo:   "updates",
+		},
+		{
+			Pkg:    "samba-common",
+			NewVer: "2:4.13.1-0.fc33",
+			Repo:   "updates",
+		},
 	}
-	for i, a := range actual {
-		e := expected[i]
-		if a.Pkg != e.Pkg {
-			t.Errorf("expected name %s, got %s", e.Pkg, a.Pkg)
-		}
-		if a.NewVer != e.NewVer {
-			t.Errorf("expected version %s, got %s", e.NewVer, a.NewVer)
-		}
-		if a.Repo != e.Repo {
-			t.Errorf("expected repo %s, got %s", e.Repo, a.Repo)
-		}
+	checkRedHatParse(t, expected, actual)
+	// Don't ignore them
+	args.NoSource = false
+	actual = parseYumCheckUpdate(out)
+	expected = api.UpdatesList{
+		{
+			Pkg:    "samba",
+			NewVer: "2:4.13.1-0.fc33",
+			Repo:   "updates",
+		},
+		{
+			Pkg:    "samba-common",
+			NewVer: "2:4.13.1-0.fc33",
+			Repo:   "updates",
+		},
+		{
+			Pkg:    "perl-Perl-OSType",
+			NewVer: "1.010-397.module+el8.3.0+7729+86a74f64",
+			Repo:   "ol8_appstream",
+		},
+		{
+			Pkg:    "perl-PerlIO-via-QuotedPrint",
+			NewVer: "0.08-396.module+el8.3.0+7729+86a74f64",
+			Repo:   "ol8_appstream",
+		},
 	}
+	checkRedHatParse(t, expected, actual)
 }
 
 func TestRedHatDnfLogs(t *testing.T) {

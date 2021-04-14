@@ -35,10 +35,11 @@ var args struct {
 	NoCache        bool          `arg:"--no-cache,env:NO_CACHE" help:"Don't use cache file"`
 	NoLogFile      bool          `arg:"--no-log,env:NO_LOG_FILE" help:"Don't log to file"`
 	NoRefresh      bool          `arg:"--no-refresh,env:NO_REFRESH" help:"Don't auto-refresh"`
+	NoSource       bool          `arg:"--no-source,env:NO_SOURCE" help:"Ignore source packages (RedHat)"`
 	Notify         bool          `arg:"--notify.enable,env:NOTIFY_ENABLE" help:"Enable notifications, webhook URL is required"`
 	NotifyDelta    bool          `arg:"--notify.delta,env:NOTIFY_DELTA" help:"Only send differences in notifications"`
-	NotifyInterval time.Duration `arg:"--notify.interval,env:NOTIFY_INTERVAL" help:"Minimum time between notifications"`
 	NotifyFormat   string        `arg:"--notify.format,env:NOTIFY_FORMAT" help:"Time format for embed footer" default:"2006/01/02 15:04"`
+	NotifyInterval time.Duration `arg:"--notify.interval,env:NOTIFY_INTERVAL" help:"Minimum time between notifications"`
 	Quiet          bool          `arg:"-q,--quiet" help:"Don't log to console"`
 	Systemd        bool          `arg:"--systemd" help:"Run HTTP server using systemd socket activation"`
 	Watch          bool          `arg:"-w,--watch.enable,env:WATCH_ENABLE" help:"Watch for package manager log file updates"`
